@@ -1,0 +1,262 @@
+# EduManagement Database Specification
+# Clean, human-readable configuration for data generation
+# Lines starting with # are comments
+
+# ============================================================
+# FIXED TEST ACCOUNTS
+# ============================================================
+[test_accounts]
+password: 123456
+salt_base64: MTExMQ==
+
+student_username: STUDENT
+student_email: student.test@edu.vn
+student_name: Nguyễn Văn Test Student
+student_code: SV999999
+student_gender: male
+student_dob: 2005-01-15
+student_phone: 0901234567
+student_class_year: 2023
+
+instructor_username: INSTRUCTOR
+instructor_email: instructor.test@edu.vn
+instructor_name: Trần Thị Test Instructor
+instructor_code: GV9999
+instructor_gender: female
+instructor_dob: 1985-03-20
+instructor_phone: 0907654321
+instructor_degree: Tiến sĩ
+instructor_hire_date: 2015-09-01
+
+admin_username: ADMIN
+admin_email: admin.test@edu.vn
+admin_name: Lê Minh Test Admin
+admin_code: AD9999
+admin_gender: male
+admin_dob: 1980-07-10
+admin_phone: 0909876543
+admin_position: Quản trị viên hệ thống
+
+# ============================================================
+# ACADEMIC YEARS
+# ============================================================
+[academic_years]
+2023-2024: 2023-09-01 to 2024-08-31, active
+2024-2025: 2024-09-01 to 2025-08-31, active
+2025-2026: 2025-09-01 to 2026-08-31, active
+
+# ============================================================
+# SEMESTERS (auto-generated from academic years)
+# ============================================================
+# Format: fall (Sep-Dec), spring (Jan-May), summer (Jun-Aug)
+# Registration starts 30 days before, ends 7 days before
+
+# ============================================================
+# FACULTIES & DEPARTMENTS
+# ============================================================
+[faculties]
+# Format: FacultyName | FacultyCode | Department1, Department2, ...
+
+Công nghệ thông tin | CNTT | Khoa học máy tính, Hệ thống thông tin, Kỹ thuật phần mềm
+Kinh tế | KTE | Quản trị kinh doanh, Tài chính - Ngân hàng, Marketing
+Kỹ thuật | KT | Cơ khí, Điện - Điện tử, Xây dựng
+Khoa học tự nhiên | KHTN | Toán học, Vật lý, Hóa học
+
+# ============================================================
+# GENERAL SUBJECTS (Common to all students)
+# ============================================================
+[general_subjects]
+# Format: SubjectName | SubjectCode | Credits | TheoryHours | PracticeHours
+
+Triết học Mác - Lênin | TRHH101 | 3 | 30 | 15
+Kinh tế chính trị Mác - Lênin | KTCT102 | 2 | 20 | 10
+Chủ nghĩa xã hội khoa học | CNXH103 | 2 | 20 | 10
+Tư tưởng Hồ Chí Minh | TTHCM104 | 2 | 20 | 10
+Tiếng Anh 1 | ENG101 | 3 | 30 | 15
+Tiếng Anh 2 | ENG102 | 3 | 30 | 15
+Tiếng Anh 3 | ENG103 | 3 | 30 | 15
+Giáo dục thể chất 1 | PE101 | 2 | 0 | 30
+Giáo dục thể chất 2 | PE102 | 2 | 0 | 30
+Giáo dục quốc phòng | MIL101 | 3 | 30 | 15
+
+# ============================================================
+# SPECIALIZED SUBJECTS BY DEPARTMENT
+# ============================================================
+[department_subjects]
+# Format: DepartmentName | SubjectName | SubjectCode | Credits | TheoryHours | PracticeHours
+
+# Computer Science Department
+Khoa học máy tính | Nhập môn lập trình | CS101 | 4 | 30 | 30
+Khoa học máy tính | Cấu trúc dữ liệu và giải thuật | CS201 | 4 | 30 | 30
+Khoa học máy tính | Lập trình hướng đối tượng | CS202 | 4 | 30 | 30
+Khoa học máy tính | Hệ điều hành | CS203 | 3 | 30 | 15
+Khoa học máy tính | Cơ sở dữ liệu | CS204 | 3 | 30 | 15
+Khoa học máy tính | Mạng máy tính | CS301 | 3 | 30 | 15
+Khoa học máy tính | Trí tuệ nhân tạo | CS302 | 3 | 30 | 15
+Khoa học máy tính | Học máy | CS303 | 3 | 30 | 15
+Khoa học máy tính | Thị giác máy tính | CS401 | 3 | 30 | 15
+Khoa học máy tính | Xử lý ngôn ngữ tự nhiên | CS402 | 3 | 30 | 15
+
+# Information Systems
+Hệ thống thông tin | Phân tích thiết kế hệ thống | IS201 | 3 | 30 | 15
+Hệ thống thông tin | Quản trị dự án CNTT | IS202 | 3 | 30 | 15
+Hệ thống thông tin | An ninh mạng | IS301 | 3 | 30 | 15
+Hệ thống thông tin | Quản trị hệ thống | IS302 | 3 | 30 | 15
+Hệ thống thông tin | Kiến trúc doanh nghiệp | IS401 | 3 | 30 | 15
+
+# Software Engineering
+Kỹ thuật phần mềm | Công nghệ phần mềm | SE201 | 3 | 30 | 15
+Kỹ thuật phần mềm | Kiểm thử phần mềm | SE202 | 3 | 30 | 15
+Kỹ thuật phần mềm | Quản lý dự án phần mềm | SE301 | 3 | 30 | 15
+Kỹ thuật phần mềm | Phát triển ứng dụng web | SE302 | 4 | 30 | 30
+Kỹ thuật phần mềm | Phát triển ứng dụng di động | SE401 | 4 | 30 | 30
+
+# Business Administration
+Quản trị kinh doanh | Nguyên lý quản trị | BA101 | 3 | 30 | 15
+Quản trị kinh doanh | Quản trị marketing | BA201 | 3 | 30 | 15
+Quản trị kinh doanh | Quản trị nhân lực | BA202 | 3 | 30 | 15
+Quản trị kinh doanh | Quản trị tài chính | BA301 | 3 | 30 | 15
+Quản trị kinh doanh | Quản trị chiến lược | BA401 | 3 | 30 | 15
+
+# Finance & Banking
+Tài chính - Ngân hàng | Nguyên lý kế toán | FIN101 | 3 | 30 | 15
+Tài chính - Ngân hàng | Tài chính doanh nghiệp | FIN201 | 3 | 30 | 15
+Tài chính - Ngân hàng | Ngân hàng thương mại | FIN202 | 3 | 30 | 15
+Tài chính - Ngân hàng | Đầu tư chứng khoán | FIN301 | 3 | 30 | 15
+Tài chính - Ngân hàng | Quản trị rủi ro tài chính | FIN401 | 3 | 30 | 15
+
+# Marketing
+Marketing | Nguyên lý Marketing | MKT101 | 3 | 30 | 15
+Marketing | Nghiên cứu thị trường | MKT201 | 3 | 30 | 15
+Marketing | Marketing số | MKT301 | 3 | 30 | 15
+Marketing | Quản trị thương hiệu | MKT302 | 3 | 30 | 15
+Marketing | Marketing quốc tế | MKT401 | 3 | 30 | 15
+
+# Mechanical Engineering
+Cơ khí | Vẽ kỹ thuật cơ khí | ME101 | 3 | 15 | 30
+Cơ khí | Cơ học lý thuyết | ME201 | 4 | 45 | 15
+Cơ khí | Sức bền vật liệu | ME202 | 4 | 40 | 20
+Cơ khí | Thiết kế máy | ME301 | 3 | 30 | 15
+Cơ khí | Chế tạo máy | ME401 | 4 | 30 | 30
+
+# Electrical Engineering
+Điện - Điện tử | Mạch điện | EE101 | 3 | 30 | 15
+Điện - Điện tử | Điện tử số | EE201 | 3 | 30 | 15
+Điện - Điện tử | Vi điều khiển | EE301 | 3 | 30 | 15
+Điện - Điện tử | Hệ thống nhúng | EE302 | 4 | 30 | 30
+Điện - Điện tử | IoT và ứng dụng | EE401 | 3 | 30 | 15
+
+# Civil Engineering
+Xây dựng | Vẽ kỹ thuật xây dựng | CE101 | 3 | 15 | 30
+Xây dựng | Cơ học kết cấu | CE201 | 4 | 40 | 20
+Xây dựng | Vật liệu xây dựng | CE202 | 3 | 30 | 15
+Xây dựng | Thiết kế công trình | CE301 | 4 | 30 | 30
+Xây dựng | Quản lý dự án xây dựng | CE401 | 3 | 30 | 15
+
+# Mathematics
+Toán học | Giải tích 1 | MATH101 | 4 | 45 | 15
+Toán học | Giải tích 2 | MATH102 | 4 | 45 | 15
+Toán học | Đại số tuyến tính | MATH103 | 3 | 30 | 15
+Toán học | Xác suất thống kê | MATH201 | 3 | 30 | 15
+Toán học | Toán rời rạc | MATH202 | 3 | 30 | 15
+
+# Physics
+Vật lý | Vật lý đại cương 1 | PHY101 | 3 | 30 | 15
+Vật lý | Vật lý đại cương 2 | PHY102 | 3 | 30 | 15
+Vật lý | Cơ học lượng tử | PHY301 | 3 | 30 | 15
+Vật lý | Vật lý hạt nhân | PHY302 | 3 | 30 | 15
+
+# Chemistry
+Hóa học | Hóa đại cương | CHEM101 | 3 | 30 | 15
+Hóa học | Hóa hữu cơ | CHEM201 | 3 | 30 | 15
+Hóa học | Hóa phân tích | CHEM301 | 3 | 30 | 15
+
+# ============================================================
+# CLASS CURRICULA (Which subjects each class takes)
+# ============================================================
+[class_curricula]
+# Format: ClassName | Department | SubjectCode1, SubjectCode2, ...
+# @ALL_GENERAL means include all general subjects
+
+K2023-1 | Khoa học máy tính | @ALL_GENERAL, CS101, CS201, CS202, CS203, CS204, CS301, CS302, CS303, MATH101, MATH102, MATH103
+K2023-2 | Hệ thống thông tin | @ALL_GENERAL, CS101, CS201, CS204, IS201, IS202, IS301, IS302, MATH101, MATH103
+K2023-3 | Kỹ thuật phần mềm | @ALL_GENERAL, CS101, CS201, CS202, SE201, SE202, SE301, SE302, MATH101, MATH103
+
+K2024-1 | Quản trị kinh doanh | @ALL_GENERAL, BA101, BA201, BA202, BA301, FIN101, MKT101
+K2024-2 | Tài chính - Ngân hàng | @ALL_GENERAL, FIN101, FIN201, FIN202, FIN301, BA101, MATH201
+K2024-3 | Marketing | @ALL_GENERAL, MKT101, MKT201, MKT301, MKT302, BA101, BA201
+
+K2025-1 | Cơ khí | @ALL_GENERAL, ME101, ME201, ME202, ME301, PHY101, PHY102, MATH101, MATH102
+K2025-2 | Điện - Điện tử | @ALL_GENERAL, EE101, EE201, EE301, EE302, PHY101, PHY102, MATH101, MATH102
+K2025-3 | Xây dựng | @ALL_GENERAL, CE101, CE201, CE202, CE301, PHY101, MATH101, MATH102
+
+# ============================================================
+# STUDENTS
+# ============================================================
+[students]
+# Format: students_per_class: number
+students_per_class: 30
+
+# ============================================================
+# INSTRUCTORS & ADMINS
+# ============================================================
+[staff]
+regular_instructors: 12
+regular_admins: 2
+
+# ============================================================
+# BUILDINGS & ROOMS
+# ============================================================
+[buildings]
+# Format: BuildingName | BuildingCode | RoomsCount
+
+Nhà A | BLDA | 15
+Nhà B | BLDB | 15
+Nhà C | BLDC | 10
+
+# Room types: lecture_hall, classroom, computer_lab, laboratory
+# Capacities: 30, 40, 50, 60 (random distribution)
+
+# ============================================================
+# COURSE GENERATION
+# ============================================================
+[courses]
+# Percentage of subjects to offer per semester type
+fall_offering_rate: 0.7
+spring_offering_rate: 0.7
+summer_offering_rate: 0.3
+
+# Fee per credit
+fee_per_credit: 60
+
+# ============================================================
+# ENROLLMENT RULES
+# ============================================================
+[enrollment]
+# Students enroll in courses matching their class curriculum
+# Old years (< 2025): All courses completed with grades
+# Current year (2025 fall): In progress, 30% have midterm grades
+# Future semesters: Not enrolled
+
+# Grade ranges for completed courses:
+attendance_min: 7.0
+attendance_max: 10.0
+midterm_min: 5.0
+midterm_max: 9.5
+final_min: 5.0
+final_max: 9.5
+
+# ============================================================
+# NAME GENERATION
+# ============================================================
+[names]
+first_names: Nguyễn, Trần, Lê, Phạm, Hoàng, Huỳnh, Phan, Vũ, Võ, Đặng, Bùi, Đỗ, Hồ, Ngô, Dương
+middle_names: Văn, Thị, Đức, Minh, Quốc, Hữu, Thanh, Thu, Anh, Hoài, Xuân, Bảo
+last_names_male: Hùng, Dũng, Nam, Cường, Tuấn, Bình, Long, Khang, Phong, Hải, Tài, Kiên
+last_names_female: Lan, Hương, Mai, Linh, Nga, Phương, Trang, Hà, Oanh, Thảo, Chi, Nhung
+
+# ============================================================
+# OUTPUT
+# ============================================================
+[output]
+output_file: school/uni/insert_data.sql
