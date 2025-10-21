@@ -7,8 +7,8 @@ UPDATED: Removed room_booking, exam_schedule now references room directly
 """
 
 # ==================== CONFIGURATION ====================
-SPEC_FILE = 'school/uni/specs.txt'
-OUTPUT_FILE = 'school/uni/insert_data.sql'
+SPEC_FILE = r'school\uni\database\specs.txt'
+OUTPUT_FILE = r'school\uni\database\insert_data.sql'
 # ========================================================
 
 import uuid
@@ -146,9 +146,8 @@ class SQLDataGenerator:
             self.data['permissions'].append({'permission_id': perm_id, 'role_name': role_name})
             rows.append([perm_id, role_name, perm_name, desc])
         
-        self.bulk_insert('permissions', ['permission_id', 'role_name', 'permission_name', 'description'], rows)
+        self.bulk_insert('permission', ['permission_id', 'role_name', 'permission_name', 'description'], rows)
     
-    # ==================== FIXED TEST ACCOUNTS ====================
     def create_fixed_test_accounts(self):
         self.add_statement("\n-- ==================== FIXED TEST ACCOUNTS ====================")
         
@@ -178,7 +177,6 @@ class SQLDataGenerator:
             'full_name': self.test_config.get('instructor_name', 'Test Instructor')
         }
         
-        # Generate 12-digit citizen_id
         instructor_citizen_id = f"{random.randint(100000000000, 999999999999)}"
         
         person_rows.append([person_id, self.test_config.get('instructor_name'), 
@@ -189,11 +187,15 @@ class SQLDataGenerator:
                         instructor_citizen_id,
                         'TP Hồ Chí Minh'])
         
+        # FIXED: Changed 'status' to 'account_status'
         user_rows.append([user_id, person_id, self.test_config.get('instructor_username'),
                         password_hash, salt_b64, 'Instructor', 'active'])
         
+        # FIXED: Changed 'status' to 'employment_status'
         instructor_rows.append([instructor_id, person_id, self.test_config.get('instructor_code'),
                             self.test_config.get('instructor_degree'), 
+                            self.test_config.get('instructor_specialization', 'Công nghệ thông tin'),
+                            None,  # department_id
                             self.test_config.get('instructor_hire_date'), 'active'])
         
         self.data['instructors'].append({'instructor_id': instructor_id, 'person_id': person_id,
@@ -206,7 +208,6 @@ class SQLDataGenerator:
         
         self.data['fixed_accounts']['admin'] = {'person_id': person_id, 'user_id': user_id, 'admin_id': admin_id}
         
-        # Generate 12-digit citizen_id
         admin_citizen_id = f"{random.randint(100000000000, 999999999999)}"
         
         person_rows.append([person_id, self.test_config.get('admin_name'),
@@ -217,20 +218,24 @@ class SQLDataGenerator:
                         admin_citizen_id,
                         'TP Hồ Chí Minh'])
         
+        # FIXED: Changed 'status' to 'account_status'
         user_rows.append([user_id, person_id, self.test_config.get('admin_username'),
                         password_hash, salt_b64, 'Admin', 'active'])
         
+        # FIXED: Changed 'status' to 'admin_status'
         admin_rows.append([admin_id, person_id, self.test_config.get('admin_code'),
                         self.test_config.get('admin_position'), 'active'])
         
         self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
         
         self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address'], person_rows)
-        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'status'], user_rows)
-        self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'hire_date', 'status'], instructor_rows)
-        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'status'], admin_rows)
+        # FIXED: Changed 'status' to 'account_status'
+        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
+        # FIXED: Changed 'status' to 'employment_status', added specialization and department_id
+        self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
+        # FIXED: Changed 'status' to 'admin_status'
+        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
 
-    # ==================== REGULAR STAFF ====================
     def create_regular_staff(self):
         self.add_statement("\n-- ==================== REGULAR INSTRUCTORS & ADMINS ====================")
         
@@ -256,19 +261,21 @@ class SQLDataGenerator:
             phone = f"0{random.randint(300000000, 999999999)}"
             dob = date(random.randint(1970, 1990), random.randint(1, 12), random.randint(1, 28))
             
-            # Generate 12-digit citizen_id
             citizen_id = f"{random.randint(100000000000, 999999999999)}"
             
             person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 'TP Hồ Chí Minh'])
             
             user_id = self.generate_uuid()
             username = f"gv{i+1:02d}"
+            # FIXED: Changed 'status' to 'account_status'
             user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Instructor', 'active'])
             
             instructor_id = self.generate_uuid()
             degree = random.choice(['Tiến sĩ', 'Thạc sĩ', 'Cử nhân'])
+            specialization = random.choice(['Công nghệ thông tin', 'Kinh tế', 'Kỹ thuật', 'Khoa học'])
             hire_date = date(random.randint(2010, 2020), random.randint(1, 12), 1)
-            instructor_rows.append([instructor_id, person_id, f"GV{i+1:04d}", degree, hire_date, 'active'])
+            # FIXED: Changed 'status' to 'employment_status', added specialization and department_id
+            instructor_rows.append([instructor_id, person_id, f"GV{i+1:04d}", degree, specialization, None, hire_date, 'active'])
             
             self.data['instructors'].append({'instructor_id': instructor_id, 'person_id': person_id, 'full_name': full_name})
         
@@ -280,26 +287,29 @@ class SQLDataGenerator:
             email = f"admin{i+1}@edu.vn"
             phone = f"0{random.randint(300000000, 999999999)}"
             
-            # Generate 12-digit citizen_id
             citizen_id = f"{random.randint(100000000000, 999999999999)}"
             
             person_rows.append([person_id, full_name, date(1975, 1, 1), 'male', email, phone, citizen_id, 'TP Hồ Chí Minh'])
             
             user_id = self.generate_uuid()
             username = f"admin{i+1}"
+            # FIXED: Changed 'status' to 'account_status'
             user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Admin', 'active'])
             
             admin_id = self.generate_uuid()
+            # FIXED: Changed 'status' to 'admin_status'
             admin_rows.append([admin_id, person_id, f"AD{i+1:04d}", 'Quản trị viên', 'active'])
             
             self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
         
         self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address'], person_rows)
-        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'status'], user_rows)
-        self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'hire_date', 'status'], instructor_rows)
-        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'status'], admin_rows)
+        # FIXED: Changed 'status' to 'account_status'
+        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
+        # FIXED: Changed 'status' to 'employment_status', added specialization and department_id
+        self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
+        # FIXED: Changed 'status' to 'admin_status'
+        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
 
-    # ==================== FACULTIES & DEPARTMENTS ====================
     def create_faculties_and_departments(self):
         self.add_statement("\n-- ==================== FACULTIES & DEPARTMENTS ====================")
         
@@ -314,6 +324,7 @@ class SQLDataGenerator:
             dean_id = random.choice(self.data['instructors'])['instructor_id']
             
             self.data['faculties'].append({'faculty_id': faculty_id, 'faculty_name': fac_name, 'faculty_code': fac_code})
+            # FIXED: Changed 'status' to 'faculty_status'
             faculty_rows.append([faculty_id, fac_name, fac_code, dean_id, 'active'])
             
             for idx, dept_name in enumerate(dept_names):
@@ -326,12 +337,14 @@ class SQLDataGenerator:
                     'department_name': dept_name,
                     'faculty_id': faculty_id
                 })
+                # FIXED: Removed 'status' column (doesn't exist in new schema)
                 department_rows.append([dept_id, dept_name, dept_code, faculty_id, head_id])
         
-        self.bulk_insert('faculty', ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'status'], faculty_rows)
+        # FIXED: Changed 'status' to 'faculty_status'
+        self.bulk_insert('faculty', ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'faculty_status'], faculty_rows)
+        # FIXED: Removed 'status' column
         self.bulk_insert('department', ['department_id', 'department_name', 'department_code', 'faculty_id', 'head_of_department_id'], department_rows)
-    
-    # ==================== ACADEMIC YEARS & SEMESTERS ====================
+
     def create_academic_years_and_semesters(self):
         self.add_statement("\n-- ==================== ACADEMIC YEARS & SEMESTERS ====================")
         
@@ -356,7 +369,8 @@ class SQLDataGenerator:
                 'end_year': end_year
             })
             
-            ay_rows.append([academic_year_id, start_date, end_date, status])
+            # FIXED: Added 'year_name' (required in new schema), changed 'status' to 'academic_year_status'
+            ay_rows.append([academic_year_id, year_range, start_date, end_date, status])
             
             # Generate semesters
             semesters_info = [
@@ -382,12 +396,14 @@ class SQLDataGenerator:
                 reg_start = sem_start - timedelta(days=30)
                 reg_end = sem_start - timedelta(days=7)
                 
+                # FIXED: Changed 'status' to 'semester_status'
                 sem_rows.append([semester_id, sem_name, academic_year_id, sem_type, sem_start, sem_end, reg_start, reg_end, 'active'])
         
-        self.bulk_insert('academic_year', ['academic_year_id', 'start_date', 'end_date', 'status'], ay_rows)
-        self.bulk_insert('semester', ['semester_id', 'semester_name', 'academic_year_id', 'semester_type', 'start_date', 'end_date', 'registration_start_date', 'registration_end_date', 'status'], sem_rows)
+        # FIXED: Added 'year_name', changed 'status' to 'academic_year_status'
+        self.bulk_insert('academic_year', ['academic_year_id', 'year_name', 'start_date', 'end_date', 'academic_year_status'], ay_rows)
+        # FIXED: Changed 'status' to 'semester_status'
+        self.bulk_insert('semester', ['semester_id', 'semester_name', 'academic_year_id', 'semester_type', 'start_date', 'end_date', 'registration_start_date', 'registration_end_date', 'semester_status'], sem_rows)
 
-    # ==================== CLASSES ====================
     def create_classes(self):
         self.add_statement("\n-- ==================== CLASSES ====================")
         
@@ -397,6 +413,7 @@ class SQLDataGenerator:
         for line in self.spec_data.get('class_curricula', []):
             parts = [p.strip() for p in line.split('|')]
             class_name = parts[0]
+            dept_name = parts[1]
             
             if class_name in class_names:
                 continue
@@ -405,28 +422,35 @@ class SQLDataGenerator:
             # Extract year from class name (e.g., K2023-1 -> 2023)
             year = int(class_name[1:5])
             
-            # Find matching academic year
+            # Find matching academic year and department
             matching_ay = next((ay for ay in self.data['academic_years'] if ay['start_year'] == year), None)
-            if not matching_ay:
+            matching_dept = next((d for d in self.data['departments'] if d['department_name'] == dept_name), None)
+            
+            if not matching_ay or not matching_dept:
                 continue
             
             class_id = self.generate_uuid()
             class_code = class_name
+            advisor_id = random.choice(self.data['instructors'])['instructor_id']
             
             self.data['classes'].append({
                 'class_id': class_id,
                 'class_code': class_code,
                 'class_name': class_name,
+                'department_id': matching_dept['department_id'],
                 'start_academic_year_id': matching_ay['academic_year_id'],
                 'start_year': year,
-                'department_name': parts[1]
+                'department_name': dept_name
             })
             
-            class_rows.append([class_id, class_code, class_name, matching_ay['academic_year_id']])
+            # FIXED: Added 'department_id' and 'advisor_instructor_id', changed 'status' to 'class_status'
+            class_rows.append([class_id, class_code, class_name, matching_dept['department_id'], 
+                            advisor_id, matching_ay['academic_year_id'], 'active'])
         
-        self.bulk_insert('class', ['class_id', 'class_code', 'class_name', 'start_academic_year_id'], class_rows)
-    
-    # ==================== SUBJECTS ====================
+        # FIXED: Added 'department_id' and 'advisor_instructor_id', changed 'status' to 'class_status'
+        self.bulk_insert('class', ['class_id', 'class_code', 'class_name', 'department_id', 
+                                'advisor_instructor_id', 'start_academic_year_id', 'class_status'], class_rows)
+
     def create_subjects(self):
         self.add_statement("\n-- ==================== SUBJECTS ====================")
         
@@ -452,7 +476,9 @@ class SQLDataGenerator:
                 'is_general': True
             })
             
-            subject_rows.append([subject_id, subj_name, subj_code, int(credits), int(theory), int(practice), True, default_dept_id, 'active'])
+            # FIXED: Changed 'status' to 'subject_status'
+            subject_rows.append([subject_id, subj_name, subj_code, int(credits), int(theory), int(practice), 
+                            True, default_dept_id, 'active'])
         
         # Department subjects
         for line in self.spec_data.get('department_subjects', []):
@@ -477,10 +503,14 @@ class SQLDataGenerator:
                 'department_id': dept['department_id']
             })
             
-            subject_rows.append([subject_id, subj_name, subj_code, int(credits), int(theory), int(practice), False, dept['department_id'], 'active'])
+            # FIXED: Changed 'status' to 'subject_status'
+            subject_rows.append([subject_id, subj_name, subj_code, int(credits), int(theory), int(practice), 
+                            False, dept['department_id'], 'active'])
         
-        self.bulk_insert('subject', ['subject_id', 'subject_name', 'subject_code', 'credits', 'theory_hours', 'practice_hours', 'is_general', 'department_id', 'status'], subject_rows)
-    
+        # FIXED: Changed 'status' to 'subject_status'
+        self.bulk_insert('subject', ['subject_id', 'subject_name', 'subject_code', 'credits', 'theory_hours', 
+                                    'practice_hours', 'is_general', 'department_id', 'subject_status'], subject_rows)
+
     def create_curriculum_details(self):
         self.add_statement("\n-- ==================== CURRICULUM DETAILS ====================")
         
@@ -488,6 +518,12 @@ class SQLDataGenerator:
         
         for cls in self.data['classes']:
             if 'curriculum' not in cls or not cls['curriculum']:
+                continue
+            
+            # FIXED: Get department_id from class (not class_id)
+            department_id = cls.get('department_id')
+            if not department_id:
+                self.add_statement(f"-- WARNING: No department_id for class {cls.get('class_code')}")
                 continue
             
             # Get semesters for this class's academic years
@@ -518,9 +554,10 @@ class SQLDataGenerator:
                 
                 if matching_sem:
                     curriculum_detail_id = self.generate_uuid()
+                    # FIXED: Use department_id instead of class_id
                     curriculum_rows.append([
                         curriculum_detail_id,
-                        cls['class_id'],
+                        department_id,  # THIS IS THE FIX - was cls['class_id']
                         subject['subject_id'],
                         matching_sem['semester_id']
                     ])
@@ -530,8 +567,10 @@ class SQLDataGenerator:
                     semester_index += 1
         
         self.add_statement(f"-- Total curriculum details: {len(curriculum_rows)}")
+        
+        # FIXED: Column is 'department_id' not 'class_id'
         self.bulk_insert('curriculum_detail',
-                        ['curriculum_detail_id', 'class_id', 'subject_id', 'semester_id'],
+                        ['curriculum_detail_id', 'department_id', 'subject_id', 'semester_id'],
                         curriculum_rows)
 
     # ==================== CURRICULUM MAPPING ====================
@@ -591,7 +630,6 @@ class SQLDataGenerator:
             
             self.add_statement(f"-- {cls['class_code']}: {len(curriculum_subjects)} subjects mapped")
     
-    # ==================== STUDENTS ====================
     def create_students(self):
         self.add_statement("\n-- ==================== STUDENTS ====================")
         
@@ -629,7 +667,6 @@ class SQLDataGenerator:
                 'class_start_year': target_class_year
             }
             
-            # Generate 12-digit citizen_id for fixed student
             fixed_student_citizen_id = f"{random.randint(100000000000, 999999999999)}"
             
             person_rows.append([person_id, self.test_config.get('student_name'),
@@ -640,9 +677,11 @@ class SQLDataGenerator:
                             fixed_student_citizen_id,
                             'TP Hồ Chí Minh'])
             
+            # FIXED: Changed 'status' to 'account_status'
             user_rows.append([user_id, person_id, self.test_config.get('student_username'),
                             password_hash, salt_b64, 'Student', 'active'])
             
+            # FIXED: Changed 'status' to 'enrollment_status'
             student_rows.append([student_id, person_id, self.test_config.get('student_code'),
                                 target_class['class_id'], 'active'])
             
@@ -670,17 +709,18 @@ class SQLDataGenerator:
                 email = f"sv{global_counter:05d}@edu.vn"
                 phone = f"0{random.randint(300000000, 999999999)}"
                 
-                # Generate 12-digit citizen_id
                 citizen_id = f"{random.randint(100000000000, 999999999999)}"
                 
                 person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 'TP Hồ Chí Minh'])
                 
                 user_id = self.generate_uuid()
                 username = f"sv{global_counter:05d}"
+                # FIXED: Changed 'status' to 'account_status'
                 user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Student', 'active'])
                 
                 student_id = self.generate_uuid()
                 student_code = f"SV{global_counter:06d}"
+                # FIXED: Changed 'status' to 'enrollment_status'
                 student_rows.append([student_id, person_id, student_code, cls['class_id'], 'active'])
                 
                 self.data['students'].append({
@@ -695,10 +735,11 @@ class SQLDataGenerator:
                 global_counter += 1
         
         self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address'], person_rows)
-        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'status'], user_rows)
-        self.bulk_insert('student', ['student_id', 'person_id', 'student_code', 'class_id', 'status'], student_rows)
+        # FIXED: Changed 'status' to 'account_status'
+        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
+        # FIXED: Changed 'status' to 'enrollment_status'
+        self.bulk_insert('student', ['student_id', 'person_id', 'student_code', 'class_id', 'enrollment_status'], student_rows)
 
-    # ==================== BUILDINGS & ROOMS ====================
     def create_buildings_and_rooms(self):
         self.add_statement("\n-- ==================== BUILDINGS & ROOMS ====================")
         
@@ -713,6 +754,7 @@ class SQLDataGenerator:
             
             building_id = self.generate_uuid()
             self.data['buildings'].append({'building_id': building_id, 'building_name': bldg_name})
+            # FIXED: Changed 'status' to 'building_status'
             building_rows.append([building_id, bldg_name, bldg_code, 'TP Hồ Chí Minh', 'active'])
             
             bldg_letter = bldg_code[-1]
@@ -724,12 +766,14 @@ class SQLDataGenerator:
                 room_type = random.choice(room_types)
                 
                 self.data['rooms'].append({'room_id': room_id, 'room_code': room_code, 'capacity': capacity})
+                # FIXED: Changed 'status' to 'room_status'
                 room_rows.append([room_id, room_code, room_name, capacity, room_type, building_id, 'active'])
         
-        self.bulk_insert('building', ['building_id', 'building_name', 'building_code', 'address', 'status'], building_rows)
-        self.bulk_insert('room', ['room_id', 'room_code', 'room_name', 'capacity', 'room_type', 'building_id', 'status'], room_rows)
-    
-    # ==================== COURSES ====================
+        # FIXED: Changed 'status' to 'building_status'
+        self.bulk_insert('building', ['building_id', 'building_name', 'building_code', 'address', 'building_status'], building_rows)
+        # FIXED: Changed 'status' to 'room_status'
+        self.bulk_insert('room', ['room_id', 'room_code', 'room_name', 'capacity', 'room_type', 'building_id', 'room_status'], room_rows)
+
     def create_courses(self):
         self.add_statement("\n-- ==================== COURSES ====================")
         
@@ -761,12 +805,6 @@ class SQLDataGenerator:
             for subject in subjects_to_offer:
                 course_id = self.generate_uuid()
                 
-                # Use fixed instructor sometimes in fall 2025
-                if semester['start_year'] == 2025 and sem_type == 'fall' and random.random() < 0.3:
-                    instructor_id = self.data['fixed_accounts']['instructor']['instructor_id']
-                else:
-                    instructor_id = random.choice(self.data['instructors'])['instructor_id']
-                
                 self.data['courses'].append({
                     'course_id': course_id,
                     'subject_id': subject['subject_id'],
@@ -779,16 +817,16 @@ class SQLDataGenerator:
                     'semester_start': semester['start_date'],
                     'semester_end': semester['end_date'],
                     'start_year': semester['start_year'],
-                    'semester_type': semester['semester_type'],
-                    'instructor_id': instructor_id
+                    'semester_type': semester['semester_type']
                 })
                 
-                course_rows.append([course_id, subject['subject_id'], instructor_id, semester['semester_id'], fee, 'active'])
+                # FIXED: Removed 'instructor_id' (moved to course_class), changed 'status' to 'course_status'
+                course_rows.append([course_id, subject['subject_id'], semester['semester_id'], fee, 'active'])
         
         self.add_statement(f"-- Total courses generated: {len(course_rows)}")
-        self.bulk_insert('course', ['course_id', 'subject_id', 'instructor_id', 'semester_id', 'fee_per_credit', 'status'], course_rows)
-    
-    # ==================== COURSE CLASSES (Multiple sessions per course) ====================
+        # FIXED: Removed 'instructor_id', changed 'status' to 'course_status'
+        self.bulk_insert('course', ['course_id', 'subject_id', 'semester_id', 'fee_per_credit', 'course_status'], course_rows)
+
     def create_course_classes(self):
         self.add_statement("\n-- ==================== COURSE CLASSES (REALISTIC SCHEDULING) ====================")
         self.add_statement("-- Each course_class meets on SPECIFIC days at SPECIFIC times")
@@ -853,6 +891,12 @@ class SQLDataGenerator:
                 attempts = 0
                 max_attempts = 100
                 
+                # Select instructor (use fixed instructor sometimes in fall 2025)
+                if course['start_year'] == 2025 and course['semester_type'] == 'fall' and random.random() < 0.3:
+                    instructor_id = self.data['fixed_accounts']['instructor']['instructor_id']
+                else:
+                    instructor_id = random.choice(self.data['instructors'])['instructor_id']
+                
                 while not scheduled and attempts < max_attempts:
                     attempts += 1
                     
@@ -891,19 +935,21 @@ class SQLDataGenerator:
                             'semester_end': course['semester_end'],
                             'start_year': course['start_year'],
                             'semester_type': course['semester_type'],
+                            'instructor_id': instructor_id,
                             'room_id': room['room_id'],
                             'days': days,
                             'start_period': time_slot[0],
                             'end_period': time_slot[1],
                             'max_students': max_per_session,
                             'session_number': session_idx + 1,
-                            'enrolled_count': 0  # Will be updated during enrollment
+                            'enrolled_count': 0
                         })
                         
-                        # Insert ONE record with PRIMARY day (first day)
+                        # FIXED: Added 'instructor_id', changed 'status' to 'course_class_status'
                         course_class_rows.append([
                             course_class_id,
                             course['course_id'],
+                            instructor_id,  # NEW: instructor_id now in course_class
                             room['room_id'],
                             course['semester_start'],
                             course['semester_end'],
@@ -934,6 +980,7 @@ class SQLDataGenerator:
                         'semester_end': course['semester_end'],
                         'start_year': course['start_year'],
                         'semester_type': course['semester_type'],
+                        'instructor_id': instructor_id,
                         'room_id': room['room_id'],
                         'days': days,
                         'start_period': time_slot[0],
@@ -943,10 +990,11 @@ class SQLDataGenerator:
                         'enrolled_count': 0
                     })
                     
-                    # Insert ONE record
+                    # FIXED: Added 'instructor_id', changed 'status' to 'course_class_status'
                     course_class_rows.append([
                         course_class_id,
                         course['course_id'],
+                        instructor_id,  # NEW: instructor_id now in course_class
                         room['room_id'],
                         course['semester_start'],
                         course['semester_end'],
@@ -961,12 +1009,13 @@ class SQLDataGenerator:
         
         self.add_statement(f"-- Generated {len(self.data['course_classes'])} course class sections")
         self.add_statement(f"-- Total course_class records: {len(course_class_rows)}")
+        
+        # FIXED: Added 'instructor_id', changed 'status' to 'course_class_status'
         self.bulk_insert('course_class', 
-                        ['course_class_id', 'course_id', 'room_id', 'date_start', 'date_end', 
-                        'max_students', 'day_of_week', 'start_period', 'end_period', 'status'],
+                        ['course_class_id', 'course_id', 'instructor_id', 'room_id', 'date_start', 'date_end', 
+                        'max_students', 'day_of_week', 'start_period', 'end_period', 'course_class_status'],
                         course_class_rows)
 
-    # ==================== STUDENT ENROLLMENTS (MASSIVE DATA WITH CONFLICT CHECKING) ====================
     def create_student_enrollments(self):
         self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (REALISTIC & MASSIVE) ====================")
         self.add_statement("-- Students enrolled with STRICT schedule conflict checking")
@@ -1141,6 +1190,8 @@ class SQLDataGenerator:
                     assigned_course_class['course_class_id'],
                     course['semester_start'],
                     status,
+                    None,  # cancellation_date
+                    None,  # cancellation_reason
                     attendance,
                     midterm,
                     final,
@@ -1161,20 +1212,19 @@ class SQLDataGenerator:
         self.add_statement(f"-- Schedule conflicts detected: {conflict_count}")
         self.add_statement(f"-- Enrollments skipped (no conflict-free slot): {skipped_count}")
         
-        self.bulk_insert('class_course_student',
+        # FIXED: Changed table name to 'student_enrollment', changed 'status' to 'enrollment_status'
+        # FIXED: Added cancellation_date and cancellation_reason columns
+        self.bulk_insert('student_enrollment',
                         ['enrollment_id', 'student_id', 'course_class_id', 'enrollment_date',
-                        'status', 'attendance_grade', 'midterm_grade', 'final_grade', 'is_paid'],
+                        'enrollment_status', 'cancellation_date', 'cancellation_reason',
+                        'attendance_grade', 'midterm_grade', 'final_grade', 'is_paid'],
                         enrollment_rows)
 
-    # ==================== EXAM SCHEDULES WITH ROOM BOOKINGS ====================
     def create_exam_schedules(self):
-        self.add_statement("\n-- ==================== ROOM BOOKINGS & EXAM SCHEDULES ====================")
+        self.add_statement("\n-- ==================== EXAMS ====================")
+        self.add_statement("-- exam table references room_id directly (not room_booking)")
         
-        booking_rows = []
         exam_rows = []
-        
-        # Get admin user for booking
-        admin_user_id = self.data['fixed_accounts']['admin']['user_id']
         
         # Group courses by semester
         courses_by_semester = defaultdict(list)
@@ -1203,17 +1253,17 @@ class SQLDataGenerator:
                 continue
             
             exam_slots = [
-                ('07:30:00', '09:30:00'),
-                ('10:00:00', '12:00:00'),
-                ('13:30:00', '15:30:00'),
-                ('16:00:00', '18:00:00'),
+                ('07:30:00', 120),  # 2 hours
+                ('10:00:00', 120),
+                ('13:30:00', 120),
+                ('16:00:00', 120),
             ]
             
             # Track room usage: (room_id, date, start_time) -> True
             exam_room_usage = {}
             
             for course in courses:
-                exam_format = random.choice(['multiple_choice', 'essay', 'practical', 'oral'])
+                exam_format = random.choice(['multiple_choice', 'essay', 'practical', 'oral', 'mixed'])
                 exam_type = random.choice(['midterm', 'final', 'final', 'final'])
                 
                 # Find course_classes for this course
@@ -1223,41 +1273,31 @@ class SQLDataGenerator:
                     exam_scheduled = False
                     for attempt in range(20):
                         exam_date = random.choice(exam_dates)
-                        exam_time = random.choice(exam_slots)
+                        exam_time_start, duration = random.choice(exam_slots)
                         room = random.choice(self.data['rooms'])
                         
-                        key = (room['room_id'], exam_date, exam_time[0])
+                        key = (room['room_id'], exam_date, exam_time_start)
                         if key not in exam_room_usage:
                             exam_room_usage[key] = True
                             
-                            # Create room_booking first
-                            booking_id = self.generate_uuid()
-                            booking_rows.append([
-                                booking_id,
-                                room['room_id'],
-                                'exam',
-                                exam_date,
-                                exam_time[0],
-                                exam_time[1],
-                                admin_user_id,
-                                f"Thi {exam_type} - {course['subject_name']}",
-                                'confirmed'
-                            ])
-                            
-                            # Create exam_schedule referencing the booking
                             exam_id = self.generate_uuid()
                             notes = f"Thi {exam_type} - {course['subject_name']}"
                             
+                            # exam table: course_class_id, room_id, exam_date, start_time, duration_minutes, 
+                            # exam_format, exam_type, exam_file_path, answer_key_file_path, notes, exam_status
                             exam_rows.append([
                                 exam_id,
                                 cc['course_class_id'],
-                                booking_id,  # Reference to room_booking
+                                room['room_id'],  # Direct room_id reference
                                 exam_date,
-                                exam_time[0],
-                                exam_time[1],
+                                exam_time_start,
+                                duration,
                                 exam_format,
                                 exam_type,
-                                notes
+                                None,  # exam_file_path
+                                None,  # answer_key_file_path
+                                notes,
+                                'scheduled'  # exam_status
                             ])
                             
                             exam_scheduled = True
@@ -1266,54 +1306,83 @@ class SQLDataGenerator:
                     if not exam_scheduled:
                         # Fallback: schedule anyway (may have conflicts)
                         exam_date = random.choice(exam_dates)
-                        exam_time = random.choice(exam_slots)
+                        exam_time_start, duration = random.choice(exam_slots)
                         room = random.choice(self.data['rooms'])
                         
-                        # Create room_booking
-                        booking_id = self.generate_uuid()
-                        booking_rows.append([
-                            booking_id,
-                            room['room_id'],
-                            'exam',
-                            exam_date,
-                            exam_time[0],
-                            exam_time[1],
-                            admin_user_id,
-                            f"Thi {exam_type} - {course['subject_name']}",
-                            'confirmed'
-                        ])
-                        
-                        # Create exam_schedule
                         exam_id = self.generate_uuid()
                         notes = f"Thi {exam_type} - {course['subject_name']}"
                         
                         exam_rows.append([
                             exam_id,
                             cc['course_class_id'],
-                            booking_id,  # Reference to room_booking
+                            room['room_id'],  # Direct room_id reference
                             exam_date,
-                            exam_time[0],
-                            exam_time[1],
+                            exam_time_start,
+                            duration,
                             exam_format,
                             exam_type,
-                            notes
+                            None,  # exam_file_path
+                            None,  # answer_key_file_path
+                            notes,
+                            'scheduled'  # exam_status
                         ])
         
-        self.add_statement(f"-- Total room bookings: {len(booking_rows)}")
-        self.add_statement(f"-- Total exam schedules: {len(exam_rows)}")
+        self.add_statement(f"-- Total exams: {len(exam_rows)}")
         
-        # Insert room_booking first (exam_schedule depends on it)
+        # Insert into exam table (NO room_booking involved)
+        self.bulk_insert('exam',
+                        ['exam_id', 'course_class_id', 'room_id', 'exam_date', 'start_time', 'duration_minutes',
+                        'exam_format', 'exam_type', 'exam_file_path', 'answer_key_file_path', 'notes', 'exam_status'],
+                        exam_rows)
+
+    def create_room_bookings(self):
+        """
+        Optional function to populate room_booking table for non-exam bookings
+        (meetings, events, etc.) if needed
+        """
+        self.add_statement("\n-- ==================== ROOM BOOKINGS (OPTIONAL) ====================")
+        self.add_statement("-- Creating sample room bookings for meetings and events")
+        
+        booking_rows = []
+        
+        # Get admin user for booking
+        admin_user_id = self.data['fixed_accounts']['admin']['user_id']
+        
+        # Generate some random room bookings for demonstration
+        booking_types = ['event', 'meeting', 'other']
+        num_bookings = 20  # Create 20 sample bookings
+        
+        for i in range(num_bookings):
+            booking_id = self.generate_uuid()
+            room = random.choice(self.data['rooms'])
+            booking_type = random.choice(booking_types)
+            
+            # Random date in 2025
+            booking_date = date(2025, random.randint(1, 12), random.randint(1, 28))
+            start_time = f"{random.randint(8, 16):02d}:00:00"
+            end_time = f"{random.randint(10, 18):02d}:00:00"
+            
+            purpose = f"Sample {booking_type} booking #{i+1}"
+            
+            booking_rows.append([
+                booking_id,
+                room['room_id'],
+                booking_type,
+                booking_date,
+                start_time,
+                end_time,
+                admin_user_id,
+                purpose,
+                'confirmed'  # booking_status
+            ])
+        
+        self.add_statement(f"-- Total room bookings: {len(booking_rows)}")
+        
         self.bulk_insert('room_booking',
                         ['booking_id', 'room_id', 'booking_type', 'booking_date', 'start_time', 'end_time',
-                        'booked_by', 'purpose', 'status'],
+                        'booked_by', 'purpose', 'booking_status'],
                         booking_rows)
-        
-        # Then insert exam_schedule
-        self.bulk_insert('exam_schedule',
-                        ['exam_id', 'course_class_id', 'room_booking_id', 'exam_date', 'start_time', 'end_time',
-                        'exam_format', 'exam_type', 'notes'],
-                        exam_rows)
-    
+
     # ==================== MAIN GENERATION ====================
     def generate_all(self):
         print("Generating SQL data from spec file...")
@@ -1322,7 +1391,11 @@ class SQLDataGenerator:
         self.add_statement("-- EDUMANAGEMENT DATABASE - SPEC-DRIVEN GENERATION")
         self.add_statement(f"-- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.add_statement(f"-- Spec file: {self.spec_file}")
-        self.add_statement("-- CORRECT SCHEMA: exam_schedule references room_id directly")
+        self.add_statement("-- UPDATED FOR NEW SCHEMA:")
+        self.add_statement("--   - exam references room_id directly (no room_booking)")
+        self.add_statement("--   - Updated all status column names")
+        self.add_statement("--   - instructor_id moved from course to course_class")
+        self.add_statement("--   - class_course_student renamed to student_enrollment")
         self.add_statement("-- ============================================================")
         self.add_statement("USE EduManagement;")
         self.add_statement("GO\n")
@@ -1335,13 +1408,13 @@ class SQLDataGenerator:
         self.create_classes()
         self.create_subjects()
         self.map_class_curricula()
-        self.create_curriculum_details()  # ADD THIS LINE
+        self.create_curriculum_details()
         self.create_buildings_and_rooms()
         self.create_students()
         self.create_courses()
         self.create_course_classes()
         self.create_student_enrollments()
-        self.create_exam_schedules()
+        self.create_exam_schedules()  # Updated to not use room_booking
         
         self.add_statement("\n-- ============================================================")
         self.add_statement("-- GENERATION COMPLETE - STATISTICS")
