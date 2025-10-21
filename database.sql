@@ -562,6 +562,7 @@ CREATE TABLE exam (
     answer_key_file_path NVARCHAR(1000),
     notes NVARCHAR(500),
     exam_status NVARCHAR(20) DEFAULT 'scheduled' CHECK (exam_status IN ('scheduled', 'completed', 'cancelled')),
+    is_approved BIT NOT NULL DEFAULT 0,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
