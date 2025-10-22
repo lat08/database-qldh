@@ -7,8 +7,8 @@ UPDATED: Removed room_booking, exam_schedule now references room directly
 """
 
 # ==================== CONFIGURATION ====================
-SPEC_FILE = r'school\uni\database\specs.txt'
-OUTPUT_FILE = r'school\uni\database\insert_data.sql'
+SPEC_FILE = r'database-qldh\specs.txt' 
+OUTPUT_FILE = r'database-qldh\insert_data.sql'
 # ========================================================
 
 import uuid
@@ -512,55 +512,47 @@ class SQLDataGenerator:
                                     'practice_hours', 'is_general', 'department_id', 'subject_status'], subject_rows)
 
     def create_curriculum_details(self):
+        """
+        UPDATED: curriculum_detail now links department -> subject -> semester
+        NOT class -> subject -> semester
+        """
         self.add_statement("\n-- ==================== CURRICULUM DETAILS ====================")
         
         curriculum_rows = []
         
-        for cls in self.data['classes']:
-            if 'curriculum' not in cls or not cls['curriculum']:
+        # Group subjects by department
+        subjects_by_dept = defaultdict(list)
+        for subject in self.data['subjects']:
+            dept_id = subject.get('department_id')
+            if dept_id:
+                subjects_by_dept[dept_id].append(subject)
+        
+        # For each department, distribute subjects across semesters
+        for dept_id, subjects in subjects_by_dept.items():
+            # Get semesters (use recent years)
+            recent_semesters = [s for s in self.data['semesters'] 
+                            if s['start_year'] >= 2023]
+            
+            if not recent_semesters:
                 continue
             
-            # FIXED: Get department_id from class (not class_id)
-            department_id = cls.get('department_id')
-            if not department_id:
-                self.add_statement(f"-- WARNING: No department_id for class {cls.get('class_code')}")
-                continue
-            
-            # Get semesters for this class's academic years
-            class_start_year = cls['start_year']
-            
-            # Map subjects to appropriate semesters based on typical curriculum progression
-            subjects = cls['curriculum']
-            
-            # Distribute subjects across semesters (roughly 4-6 subjects per semester)
-            subjects_per_semester = 5
+            # Distribute subjects across semesters (roughly 5-6 per semester)
+            subjects_per_semester = 6
             semester_index = 0
             
             for i, subject in enumerate(subjects):
-                # Find appropriate semester for this subject
-                # Cycle through fall, spring, summer across years
-                year_offset = semester_index // 3
-                semester_type_index = semester_index % 3
-                semester_types = ['fall', 'spring', 'summer']
-                target_sem_type = semester_types[semester_type_index]
-                target_year = class_start_year + year_offset
+                if semester_index >= len(recent_semesters):
+                    semester_index = 0  # Wrap around
                 
-                # Find matching semester
-                matching_sem = next(
-                    (s for s in self.data['semesters'] 
-                    if s['start_year'] == target_year and s['semester_type'] == target_sem_type),
-                    None
-                )
+                semester = recent_semesters[semester_index]
                 
-                if matching_sem:
-                    curriculum_detail_id = self.generate_uuid()
-                    # FIXED: Use department_id instead of class_id
-                    curriculum_rows.append([
-                        curriculum_detail_id,
-                        department_id,  # THIS IS THE FIX - was cls['class_id']
-                        subject['subject_id'],
-                        matching_sem['semester_id']
-                    ])
+                curriculum_detail_id = self.generate_uuid()
+                curriculum_rows.append([
+                    curriculum_detail_id,
+                    dept_id,
+                    subject['subject_id'],
+                    semester['semester_id']
+                ])
                 
                 # Move to next semester after distributing subjects
                 if (i + 1) % subjects_per_semester == 0:
@@ -568,11 +560,296 @@ class SQLDataGenerator:
         
         self.add_statement(f"-- Total curriculum details: {len(curriculum_rows)}")
         
-        # FIXED: Column is 'department_id' not 'class_id'
         self.bulk_insert('curriculum_detail',
                         ['curriculum_detail_id', 'department_id', 'subject_id', 'semester_id'],
                         curriculum_rows)
 
+
+    def create_exams_and_exam_classes(self):
+        """
+        NEW: Updated for two-table exam structure
+        - exam: course-level exam definition
+        - exam_class: specific exam schedule for a course_class
+        """
+        self.add_statement("\n-- ==================== EXAMS & EXAM CLASSES ====================")
+        self.add_statement("-- exam: course-level exam definition")
+        self.add_statement("-- exam_class: specific exam schedule with room and time")
+        
+        exam_rows = []
+        exam_class_rows = []
+        
+        # Track created exams by course_id to avoid duplicates
+        exams_by_course = {}
+        
+        # Group course_classes by course
+        course_classes_by_course = defaultdict(list)
+        for cc in self.data['course_classes']:
+            course_classes_by_course[cc['course_id']].append(cc)
+        
+        for course_id, course_classes in course_classes_by_course.items():
+            course = next((c for c in self.data['courses'] if c['course_id'] == course_id), None)
+            if not course:
+                continue
+            
+            # Create exam definition for this course (once per course)
+            exam_id = self.generate_uuid()
+            exam_format = random.choice(['multiple_choice', 'essay', 'practical', 'oral', 'mixed'])
+            exam_type = random.choice(['midterm', 'final', 'final', 'final'])  # More finals
+            
+            exam_rows.append([
+                exam_id,
+                course_id,
+                exam_format,
+                exam_type,
+                None,  # exam_file_pdf
+                None,  # answer_key_pdf
+                f"Đề thi {exam_type} - {course.get('subject_name', '')}",
+                1  # is_approved
+            ])
+            
+            exams_by_course[course_id] = exam_id
+            
+            # Create exam_class schedules for each course_class
+            semester = next((s for s in self.data['semesters'] 
+                            if s['semester_id'] == course['semester_id']), None)
+            
+            if not semester:
+                continue
+            
+            # Exam period: last 2 weeks of semester
+            sem_end = semester['end_date']
+            exam_start = sem_end - timedelta(days=14)
+            
+            # Generate exam dates (weekdays only)
+            exam_dates = []
+            current = exam_start
+            while current <= sem_end:
+                if current.weekday() < 6:  # Monday to Saturday
+                    exam_dates.append(current)
+                current += timedelta(days=1)
+            
+            if not exam_dates:
+                continue
+            
+            # Exam time slots
+            exam_slots = [
+                (7, 30, 120),   # 7:30 AM, 2 hours
+                (10, 0, 120),   # 10:00 AM, 2 hours
+                (13, 30, 120),  # 1:30 PM, 2 hours
+                (16, 0, 120),   # 4:00 PM, 2 hours
+            ]
+            
+            # Track room usage: (room_id, datetime) -> True
+            exam_room_usage = {}
+            
+            for cc in course_classes:
+                # Try to schedule exam without conflicts
+                exam_scheduled = False
+                
+                for attempt in range(20):
+                    exam_date = random.choice(exam_dates)
+                    hour, minute, duration = random.choice(exam_slots)
+                    start_time = datetime.combine(exam_date, datetime.min.time().replace(hour=hour, minute=minute))
+                    room = random.choice(self.data['rooms'])
+                    
+                    key = (room['room_id'], start_time)
+                    if key not in exam_room_usage:
+                        exam_room_usage[key] = True
+                        
+                        exam_class_id = self.generate_uuid()
+                        monitor_instructor = random.choice(self.data['instructors'])
+                        
+                        exam_class_rows.append([
+                            exam_class_id,
+                            exam_id,
+                            cc['course_class_id'],
+                            room['room_id'],
+                            monitor_instructor['instructor_id'],
+                            start_time,
+                            duration,
+                            'scheduled'
+                        ])
+                        
+                        exam_scheduled = True
+                        break
+                
+                if not exam_scheduled:
+                    # Fallback: schedule anyway (may conflict)
+                    exam_date = random.choice(exam_dates)
+                    hour, minute, duration = random.choice(exam_slots)
+                    start_time = datetime.combine(exam_date, datetime.min.time().replace(hour=hour, minute=minute))
+                    room = random.choice(self.data['rooms'])
+                    
+                    exam_class_id = self.generate_uuid()
+                    monitor_instructor = random.choice(self.data['instructors'])
+                    
+                    exam_class_rows.append([
+                        exam_class_id,
+                        exam_id,
+                        cc['course_class_id'],
+                        room['room_id'],
+                        monitor_instructor['instructor_id'],
+                        start_time,
+                        duration,
+                        'scheduled'
+                    ])
+        
+        self.add_statement(f"-- Total exams (course-level): {len(exam_rows)}")
+        self.add_statement(f"-- Total exam_class (scheduled): {len(exam_class_rows)}")
+        
+        # Insert exam definitions
+        self.bulk_insert('exam',
+                        ['exam_id', 'course_id', 'exam_format', 'exam_type', 
+                        'exam_file_pdf', 'answer_key_pdf', 'notes', 'is_approved'],
+                        exam_rows)
+        
+        # Insert exam_class schedules
+        self.bulk_insert('exam_class',
+                        ['exam_class_id', 'exam_id', 'course_class_id', 'room_id',
+                        'monitor_instructor_id', 'start_time', 'duration_minutes', 'exam_status'],
+                        exam_class_rows)
+
+    def create_student_health_insurance(self):
+        """
+        UPDATED: Store insurance IDs for payment generation
+        """
+        self.add_statement("\n-- ==================== STUDENT HEALTH INSURANCE ====================")
+        
+        insurance_rows = []
+        insurance_fee = 500000  # 500,000 VND per year
+        
+        # IMPORTANT: Initialize insurances list
+        self.data['insurances'] = []
+        
+        # Build academic year date lookup from semesters
+        ay_dates = {}
+        for semester in self.data['semesters']:
+            ay_id = semester['academic_year_id']
+            if ay_id not in ay_dates:
+                ay_dates[ay_id] = {
+                    'start_date': semester['start_date'],
+                    'end_date': semester['end_date']
+                }
+            else:
+                if semester['start_date'] < ay_dates[ay_id]['start_date']:
+                    ay_dates[ay_id]['start_date'] = semester['start_date']
+                if semester['end_date'] > ay_dates[ay_id]['end_date']:
+                    ay_dates[ay_id]['end_date'] = semester['end_date']
+        
+        for student in self.data['students']:
+            student_start_year = student['class_start_year']
+            
+            for ay in self.data['academic_years']:
+                if ay['start_year'] >= student_start_year and ay['start_year'] <= 2025:
+                    insurance_id = self.generate_uuid()
+                    
+                    dates = ay_dates.get(ay['academic_year_id'])
+                    if not dates:
+                        start_date = date(ay['start_year'], 9, 1)
+                        end_date = date(ay['end_year'], 8, 31)
+                    else:
+                        start_date = dates['start_date']
+                        end_date = dates['end_date']
+                    
+                    is_paid = 1 if ay['start_year'] <= 2025 else 0
+                    status = 'active' if ay['end_year'] >= 2025 else 'expired'
+                    
+                    insurance_rows.append([
+                        insurance_id,
+                        student['student_id'],
+                        ay['academic_year_id'],
+                        insurance_fee,
+                        start_date,
+                        end_date,
+                        status,
+                        is_paid
+                    ])
+                    
+                    # STORE insurance data for payment generation
+                    self.data['insurances'].append({
+                        'insurance_id': insurance_id,
+                        'student_id': student['student_id'],
+                        'academic_year_id': ay['academic_year_id'],
+                        'fee': insurance_fee,
+                        'start_date': start_date,
+                        'is_paid': is_paid
+                    })
+        
+        self.add_statement(f"-- Total health insurance records: {len(insurance_rows)}")
+        
+        self.bulk_insert('student_health_insurance',
+                        ['insurance_id', 'student_id', 'academic_year_id', 'insurance_fee',
+                        'start_date', 'end_date', 'insurance_status', 'is_paid'],
+                        insurance_rows)
+
+    def create_payments(self):
+        """
+        COMPLETE: Generate ALL payments (tuition + insurance)
+        """
+        self.add_statement("\n-- ==================== PAYMENTS ====================")
+        self.add_statement("-- Creating payments for BOTH course tuition AND health insurance")
+        
+        payment_rows = []
+        payment_methods = ['bank_transfer', 'cash', 'online', 'credit_card', 'e_wallet']
+        
+        # 1. COURSE TUITION PAYMENTS
+        self.add_statement("-- Generating course tuition payments...")
+        
+        for enrollment in self.data.get('enrollments', []):
+            payment_id = self.generate_uuid()
+            
+            # Calculate tuition amount
+            fee_per_credit = enrollment.get('fee_per_credit', 600000)
+            credits = enrollment.get('credits', 3)
+            amount = fee_per_credit * credits
+            
+            # Payment date: shortly after enrollment
+            enrollment_date = enrollment['enrollment_date']
+            payment_date = enrollment_date - timedelta(days=random.randint(1, 15))
+            
+            payment_rows.append([
+                payment_id,
+                enrollment['student_id'],
+                'course_tuition',
+                enrollment['enrollment_id'],  # MUST NOT BE NULL
+                None,  # insurance_id MUST BE NULL
+                amount,
+                payment_date,
+                random.choice(payment_methods),
+                f'Học phí môn học - {enrollment.get("course_id", "")[:8]}'
+            ])
+        
+        # 2. HEALTH INSURANCE PAYMENTS
+        self.add_statement("-- Generating health insurance payments...")
+        
+        for insurance in self.data.get('insurances', []):
+            if insurance['is_paid'] == 1:  # Only create payment if marked as paid
+                payment_id = self.generate_uuid()
+                
+                # Payment date: before start date
+                payment_date = insurance['start_date'] - timedelta(days=random.randint(7, 30))
+                
+                payment_rows.append([
+                    payment_id,
+                    insurance['student_id'],
+                    'health_insurance',
+                    None,  # enrollment_id MUST BE NULL
+                    insurance['insurance_id'],  # MUST NOT BE NULL
+                    insurance['fee'],
+                    payment_date,
+                    random.choice(payment_methods),
+                    'Bảo hiểm y tế sinh viên'
+                ])
+        
+        self.add_statement(f"-- Total course tuition payments: {len([p for p in payment_rows if p[2] == 'course_tuition'])}")
+        self.add_statement(f"-- Total insurance payments: {len([p for p in payment_rows if p[2] == 'health_insurance'])}")
+        self.add_statement(f"-- Total payments: {len(payment_rows)}")
+        
+        self.bulk_insert('payment',
+                        ['payment_id', 'student_id', 'payment_type', 'enrollment_id',
+                        'insurance_id', 'amount', 'payment_date', 'payment_method', 'notes'],
+                        payment_rows)
+  
     # ==================== CURRICULUM MAPPING ====================
     def map_class_curricula(self):
         self.add_statement("\n-- ==================== MAPPING CLASS CURRICULA ====================")
@@ -1017,11 +1294,17 @@ class SQLDataGenerator:
                         course_class_rows)
 
     def create_student_enrollments(self):
+        """
+        UPDATED: Track enrollment IDs for payment generation
+        """
         self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (REALISTIC & MASSIVE) ====================")
         self.add_statement("-- Students enrolled with STRICT schedule conflict checking")
         self.add_statement("-- Fixed STUDENT account gets deterministic grades for testing")
         
         enrollment_rows = []
+        
+        # IMPORTANT: Initialize enrollments list to track IDs
+        self.data['enrollments'] = []
         
         # Group course_classes by course_id
         course_classes_by_course = defaultdict(list)
@@ -1198,6 +1481,18 @@ class SQLDataGenerator:
                     1  # is_paid
                 ])
                 
+                # STORE enrollment data for payment generation
+                self.data['enrollments'].append({
+                    'enrollment_id': enrollment_id,
+                    'student_id': student['student_id'],
+                    'course_class_id': assigned_course_class['course_class_id'],
+                    'course_id': course['course_id'],
+                    'credits': course['credits'],
+                    'fee_per_credit': course.get('fee_per_credit', 600000),
+                    'enrollment_date': course['semester_start'],
+                    'status': status
+                })
+                
                 # Log fixed student enrollments for debugging
                 if is_fixed:
                     grade_status = "FULL GRADES" if final is not None else \
@@ -1212,8 +1507,6 @@ class SQLDataGenerator:
         self.add_statement(f"-- Schedule conflicts detected: {conflict_count}")
         self.add_statement(f"-- Enrollments skipped (no conflict-free slot): {skipped_count}")
         
-        # FIXED: Changed table name to 'student_enrollment', changed 'status' to 'enrollment_status'
-        # FIXED: Added cancellation_date and cancellation_reason columns
         self.bulk_insert('student_enrollment',
                         ['enrollment_id', 'student_id', 'course_class_id', 'enrollment_date',
                         'enrollment_status', 'cancellation_date', 'cancellation_reason',
@@ -1383,38 +1676,177 @@ class SQLDataGenerator:
                         'booked_by', 'purpose', 'booking_status'],
                         booking_rows)
 
+    def create_schedule_changes(self):
+        """
+        NEW: Generate schedule change records (makeup classes, cancellations)
+        """
+        self.add_statement("\n-- ==================== SCHEDULE CHANGES ====================")
+        
+        schedule_change_rows = []
+        
+        # Create schedule changes for ~10% of course_classes
+        sample_classes = random.sample(self.data['course_classes'], 
+                                    min(len(self.data['course_classes']) // 10, 50))
+        
+        for cc in sample_classes:
+            schedule_change_id = self.generate_uuid()
+            
+            # Random cancelled week and makeup week
+            cancelled_week = random.randint(1, 12)
+            makeup_week = random.randint(13, 16)
+            
+            # Makeup date
+            makeup_date = cc['semester_start'] + timedelta(weeks=makeup_week)
+            
+            # Different room for makeup
+            makeup_room = random.choice(self.data['rooms'])
+            
+            # Use original day/time or adjust
+            day_of_week = cc['days'][0]  # Use first day
+            
+            schedule_change_rows.append([
+                schedule_change_id,
+                cc['course_class_id'],
+                cancelled_week,
+                makeup_week,
+                makeup_date,
+                makeup_room['room_id'],
+                day_of_week,
+                cc['start_period'],
+                cc['end_period'],
+                'Lý do hủy: Giảng viên bận công tác'
+            ])
+        
+        self.add_statement(f"-- Total schedule changes: {len(schedule_change_rows)}")
+        
+        self.bulk_insert('schedule_change',
+                        ['schedule_change_id', 'course_class_id', 'cancelled_week',
+                        'makeup_week', 'makeup_date', 'makeup_room_id', 'day_of_week',
+                        'start_period', 'end_period', 'reason'],
+                        schedule_change_rows)
+
+
+    def create_notifications(self):
+        """
+        NEW: Generate notification schedules
+        """
+        self.add_statement("\n-- ==================== NOTIFICATIONS ====================")
+        
+        notification_rows = []
+        
+        # Get admin user for creating notifications
+        admin_user_id = self.data['fixed_accounts']['admin']['user_id']
+        
+        notification_types = ['event', 'tuition', 'schedule', 'important']
+        target_types = ['all', 'all_students', 'all_instructors']
+        
+        # Create 20 sample notifications
+        for i in range(20):
+            schedule_id = self.generate_uuid()
+            notif_type = random.choice(notification_types)
+            target_type = random.choice(target_types)
+            
+            scheduled_date = datetime.now() - timedelta(days=random.randint(0, 90))
+            visible_from = scheduled_date - timedelta(days=random.randint(1, 7))
+            
+            titles = {
+                'event': f'Sự kiện: Hội thảo khoa học #{i+1}',
+                'tuition': f'Thông báo: Đóng học phí kỳ {i+1}',
+                'schedule': f'Thay đổi lịch học tuần {i+1}',
+                'important': f'Thông báo quan trọng #{i+1}'
+            }
+            
+            notification_rows.append([
+                schedule_id,
+                notif_type,
+                titles.get(notif_type, 'Thông báo'),
+                f'Nội dung thông báo số {i+1}',
+                scheduled_date,
+                visible_from,
+                0,  # is_read
+                target_type,
+                None,  # target_id
+                admin_user_id,
+                'sent'
+            ])
+        
+        self.add_statement(f"-- Total notifications: {len(notification_rows)}")
+        
+        self.bulk_insert('notification_schedule',
+                        ['schedule_id', 'notification_type', 'title', 'content',
+                        'scheduled_date', 'visible_from', 'is_read', 'target_type',
+                        'target_id', 'created_by_user', 'status'],
+                        notification_rows)
+        
+    def save_to_file(self):
+        """
+        Save generated SQL statements to output file
+        """
+        output_file = OUTPUT_FILE
+        
+        # Ensure output directory exists
+        output_dir = os.path.dirname(output_file)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        # Generate all SQL
+        sql_content = self.generate_all()
+        
+        # Write to file
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(sql_content)
+        
+        print(f"\n✓ SQL data generated successfully!")
+        print(f"✓ Output file: {output_file}")
+        print(f"✓ File size: {os.path.getsize(output_file) / 1024:.2f} KB")
+        print(f"✓ Total SQL statements: {len(self.sql_statements)}")
+        
+        return output_file
+
     # ==================== MAIN GENERATION ====================
     def generate_all(self):
+        """
+        UPDATED: Main generation with new functions
+        """
         print("Generating SQL data from spec file...")
         
         self.add_statement("-- ============================================================")
-        self.add_statement("-- EDUMANAGEMENT DATABASE - SPEC-DRIVEN GENERATION")
+        self.add_statement("-- EDUMANAGEMENT DATABASE - COMPLETE SCHEMA GENERATION")
         self.add_statement(f"-- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.add_statement(f"-- Spec file: {self.spec_file}")
-        self.add_statement("-- UPDATED FOR NEW SCHEMA:")
-        self.add_statement("--   - exam references room_id directly (no room_booking)")
-        self.add_statement("--   - Updated all status column names")
-        self.add_statement("--   - instructor_id moved from course to course_class")
-        self.add_statement("--   - class_course_student renamed to student_enrollment")
+        self.add_statement("-- UPDATED FOR COMPLETE NEW SCHEMA")
         self.add_statement("-- ============================================================")
         self.add_statement("USE EduManagement;")
         self.add_statement("GO\n")
         
+        # Core entities
         self.create_permissions()
         self.create_fixed_test_accounts()
         self.create_regular_staff()
         self.create_faculties_and_departments()
         self.create_academic_years_and_semesters()
+        self.create_buildings_and_rooms()
+        
+        # Academic structure
         self.create_classes()
         self.create_subjects()
         self.map_class_curricula()
-        self.create_curriculum_details()
-        self.create_buildings_and_rooms()
+        self.create_curriculum_details()  # UPDATED
         self.create_students()
+        
+        # Course management
         self.create_courses()
         self.create_course_classes()
         self.create_student_enrollments()
-        self.create_exam_schedules()  # Updated to not use room_booking
+        
+        # Exams and assessments
+        self.create_exams_and_exam_classes()  # NEW/UPDATED
+        
+        # Additional features
+        self.create_student_health_insurance()  # NEW
+        self.create_payments()  # NEW
+        self.create_schedule_changes()  # NEW
+        self.create_notifications()  # NEW
         
         self.add_statement("\n-- ============================================================")
         self.add_statement("-- GENERATION COMPLETE - STATISTICS")
@@ -1427,25 +1859,6 @@ class SQLDataGenerator:
         self.add_statement(f"-- Rooms: {len(self.data['rooms'])}")
         
         return '\n'.join(self.sql_statements)
-
-    def save_to_file(self):
-        sql_content = self.generate_all()
-        
-        output_file = OUTPUT_FILE
-        directory = os.path.dirname(output_file)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory)
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(sql_content)
-        
-        print(f"\n{'='*70}")
-        print(f"SQL file generated: {output_file}")
-        print(f"Total SQL statements: {len(self.sql_statements)}")
-        print(f"File size: {len(sql_content):,} characters")
-        print(f"{'='*70}")
-        
-        return output_file
 
 # ==================== RUN ====================
 if __name__ == "__main__":

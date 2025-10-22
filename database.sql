@@ -547,21 +547,16 @@ CREATE TABLE notification_schedule (
 );
 
 -- ============================================================
--- EXAM
+-- EXAM (Course-level exam definition)
 -- ============================================================
 CREATE TABLE exam (
     exam_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    course_class_id UNIQUEIDENTIFIER NOT NULL,
-    room_id UNIQUEIDENTIFIER NOT NULL,
-    exam_date DATE NOT NULL,
-    start_time TIME NOT NULL,
-    duration_minutes INT NOT NULL CHECK (duration_minutes > 0),
+    course_id UNIQUEIDENTIFIER NOT NULL,
     exam_format NVARCHAR(50) NOT NULL CHECK (exam_format IN ('multiple_choice', 'essay', 'practical', 'oral', 'mixed')),
     exam_type NVARCHAR(20) DEFAULT 'final' CHECK (exam_type IN ('midterm', 'final', 'makeup', 'quiz')),
-    exam_file_path NVARCHAR(1000),
-    answer_key_file_path NVARCHAR(1000),
+    exam_file_pdf NVARCHAR(1000),
+    answer_key_pdf NVARCHAR(1000),
     notes NVARCHAR(500),
-    exam_status NVARCHAR(20) DEFAULT 'scheduled' CHECK (exam_status IN ('scheduled', 'completed', 'cancelled')),
     is_approved BIT NOT NULL DEFAULT 0,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
@@ -571,10 +566,38 @@ CREATE TABLE exam (
     is_deleted BIT NOT NULL DEFAULT 0,
     is_active BIT NOT NULL DEFAULT 1,
 
-    CONSTRAINT FK_exam_course_class FOREIGN KEY (course_class_id) 
+    CONSTRAINT FK_exam_course FOREIGN KEY (course_id) 
+        REFERENCES course(course_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- EXAM CLASS (Exam schedule for specific course class)
+-- ============================================================
+CREATE TABLE exam_class (
+    exam_class_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    exam_id UNIQUEIDENTIFIER NOT NULL,
+    course_class_id UNIQUEIDENTIFIER NOT NULL,
+    room_id UNIQUEIDENTIFIER NOT NULL,
+    monitor_instructor_id UNIQUEIDENTIFIER NULL,
+    start_time DATETIME2 NOT NULL,
+    duration_minutes INT NOT NULL CHECK (duration_minutes > 0),
+    exam_status NVARCHAR(20) DEFAULT 'scheduled' CHECK (exam_status IN ('scheduled', 'completed', 'cancelled')),
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_exam_class_exam FOREIGN KEY (exam_id) 
+        REFERENCES exam(exam_id) ON DELETE NO ACTION,
+    CONSTRAINT FK_exam_class_course_class FOREIGN KEY (course_class_id) 
         REFERENCES course_class(course_class_id) ON DELETE CASCADE,
-    CONSTRAINT FK_exam_room FOREIGN KEY (room_id) 
-        REFERENCES room(room_id) ON DELETE NO ACTION
+    CONSTRAINT FK_exam_class_room FOREIGN KEY (room_id) 
+        REFERENCES room(room_id) ON DELETE NO ACTION,
+    CONSTRAINT FK_exam_class_monitor FOREIGN KEY (monitor_instructor_id) 
+        REFERENCES instructor(instructor_id) ON DELETE SET NULL
 );
 
 -- ============================================================
@@ -603,31 +626,6 @@ CREATE TABLE student_health_insurance (
         REFERENCES academic_year(academic_year_id) ON DELETE CASCADE,
     CONSTRAINT UQ_student_academic_year_insurance UNIQUE (student_id, academic_year_id),
     CONSTRAINT CHK_student_health_insurance_dates CHECK (end_date > start_date)
-);
-
--- ============================================================
--- SCHOLARSHIP REQUEST
--- ============================================================
-CREATE TABLE scholarship_request (
-    request_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    student_id UNIQUEIDENTIFIER NOT NULL UNIQUE,
-    verification_document_path NVARCHAR(1000),
-    eligible_percentage INT NOT NULL CHECK (eligible_percentage IN (40, 60, 100)),
-    request_status NVARCHAR(20) DEFAULT 'pending' CHECK (request_status IN ('pending', 'approved', 'denied', 'revoked')),
-    approved_date DATETIME2 NULL,
-    denied_date DATETIME2 NULL,
-    revoked_date DATETIME2 NULL,
-    review_notes NVARCHAR(1000),
-
-    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at DATETIME2 NULL,
-    created_by UNIQUEIDENTIFIER NULL,
-    updated_by UNIQUEIDENTIFIER NULL,
-    is_deleted BIT NOT NULL DEFAULT 0,
-    is_active BIT NOT NULL DEFAULT 1,
-
-    CONSTRAINT FK_scholarship_request_student FOREIGN KEY (student_id) 
-        REFERENCES student(student_id) ON DELETE CASCADE
 );
 
 -- ============================================================
