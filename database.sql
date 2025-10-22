@@ -688,3 +688,24 @@ CREATE TABLE room_booking (
         REFERENCES user_account(user_id) ON DELETE NO ACTION,
     CONSTRAINT CHK_room_booking_times CHECK (end_time > start_time)
 );
+
+-- ============================================================
+-- REGULATION
+-- ============================================================
+CREATE TABLE regulation (
+    regulation_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    regulation_name NVARCHAR(200) NOT NULL,
+    target NVARCHAR(20) NOT NULL CHECK (target IN ('student', 'instructor')),
+    pdf_file_path NVARCHAR(1000) NOT NULL,
+	expire_date DATE NULL,
+    created_by_admin UNIQUEIDENTIFIER NOT NULL,
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_regulation_created_by_admin FOREIGN KEY (created_by_admin) 
+        REFERENCES admin(admin_id) ON DELETE NO ACTION
+);
