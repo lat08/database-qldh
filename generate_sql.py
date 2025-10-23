@@ -784,42 +784,39 @@ class SQLDataGenerator:
 
     def create_payments(self):
         """
-        COMPLETE: Generate ALL payments (tuition + insurance)
+        UPDATED: Generate payments using TWO separate tables
+        - payment_enrollment: for course tuition
+        - payment_insurance: for health insurance
         """
         self.add_statement("\n-- ==================== PAYMENTS ====================")
-        self.add_statement("-- Creating payments for BOTH course tuition AND health insurance")
+        self.add_statement("-- Creating payments in TWO separate tables:")
+        self.add_statement("-- 1. payment_enrollment (course tuition)")
+        self.add_statement("-- 2. payment_insurance (health insurance)")
         
-        payment_rows = []
-        payment_methods = ['bank_transfer', 'cash', 'online', 'credit_card', 'e_wallet']
+        enrollment_payment_rows = []
+        insurance_payment_rows = []
+        payment_types = ['cash', 'qr']  # Only cash and qr as per schema
         
-        # 1. COURSE TUITION PAYMENTS
-        self.add_statement("-- Generating course tuition payments...")
+        # 1. COURSE TUITION PAYMENTS (payment_enrollment)
+        self.add_statement("\n-- Generating course tuition payments...")
         
         for enrollment in self.data.get('enrollments', []):
-            payment_id = self.generate_uuid()
-            
-            # Calculate tuition amount
-            fee_per_credit = enrollment.get('fee_per_credit', 600000)
-            credits = enrollment.get('credits', 3)
-            amount = fee_per_credit * credits
-            
-            # Payment date: shortly after enrollment
-            enrollment_date = enrollment['enrollment_date']
-            payment_date = enrollment_date - timedelta(days=random.randint(1, 15))
-            
-            payment_rows.append([
-                payment_id,
-                enrollment['student_id'],
-                'course_tuition',
-                enrollment['enrollment_id'],  # MUST NOT BE NULL
-                None,  # insurance_id MUST BE NULL
-                amount,
-                payment_date,
-                random.choice(payment_methods),
-                f'Học phí môn học - {enrollment.get("course_id", "")[:8]}'
-            ])
+            if enrollment.get('status') == 'completed' or enrollment.get('status') == 'registered':
+                payment_id = self.generate_uuid()
+                
+                # Payment date: shortly after enrollment
+                enrollment_date = enrollment['enrollment_date']
+                payment_date = enrollment_date + timedelta(days=random.randint(1, 15))
+                
+                enrollment_payment_rows.append([
+                    payment_id,
+                    enrollment['enrollment_id'],
+                    random.choice(payment_types),
+                    payment_date,
+                    f'Thanh toán học phí - {enrollment.get("subject_code", "")}'
+                ])
         
-        # 2. HEALTH INSURANCE PAYMENTS
+        # 2. HEALTH INSURANCE PAYMENTS (payment_insurance)
         self.add_statement("-- Generating health insurance payments...")
         
         for insurance in self.data.get('insurances', []):
@@ -829,27 +826,26 @@ class SQLDataGenerator:
                 # Payment date: before start date
                 payment_date = insurance['start_date'] - timedelta(days=random.randint(7, 30))
                 
-                payment_rows.append([
+                insurance_payment_rows.append([
                     payment_id,
-                    insurance['student_id'],
-                    'health_insurance',
-                    None,  # enrollment_id MUST BE NULL
-                    insurance['insurance_id'],  # MUST NOT BE NULL
-                    insurance['fee'],
+                    insurance['insurance_id'],
+                    random.choice(payment_types),
                     payment_date,
-                    random.choice(payment_methods),
-                    'Bảo hiểm y tế sinh viên'
+                    'Thanh toán bảo hiểm y tế sinh viên'
                 ])
         
-        self.add_statement(f"-- Total course tuition payments: {len([p for p in payment_rows if p[2] == 'course_tuition'])}")
-        self.add_statement(f"-- Total insurance payments: {len([p for p in payment_rows if p[2] == 'health_insurance'])}")
-        self.add_statement(f"-- Total payments: {len(payment_rows)}")
+        self.add_statement(f"-- Total course tuition payments: {len(enrollment_payment_rows)}")
+        self.add_statement(f"-- Total insurance payments: {len(insurance_payment_rows)}")
         
-        self.bulk_insert('payment',
-                        ['payment_id', 'student_id', 'payment_type', 'enrollment_id',
-                        'insurance_id', 'amount', 'payment_date', 'payment_method', 'notes'],
-                        payment_rows)
-  
+        # Insert into separate tables
+        self.bulk_insert('payment_enrollment',
+                        ['payment_id', 'enrollment_id', 'payment_type', 'payment_date', 'notes'],
+                        enrollment_payment_rows)
+        
+        self.bulk_insert('payment_insurance',
+                        ['payment_id', 'insurance_id', 'payment_type', 'payment_date', 'notes'],
+                        insurance_payment_rows)
+
     # ==================== CURRICULUM MAPPING ====================
     def map_class_curricula(self):
         self.add_statement("\n-- ==================== MAPPING CLASS CURRICULA ====================")

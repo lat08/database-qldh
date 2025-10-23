@@ -132,6 +132,40 @@ CREATE TABLE room (
 );
 
 -- ============================================================
+-- ROOM_AMENITY
+-- ============================================================
+CREATE TABLE room_amenity (
+    amenity_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    amenity_name NVARCHAR(100) NOT NULL UNIQUE,
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1
+);
+
+-- ============================================================
+-- ROOM_AMENITY_MAPPING
+-- ============================================================
+CREATE TABLE room_amenity_mapping (
+    room_amenity_mapping_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    room_id UNIQUEIDENTIFIER NOT NULL,
+    amenity_id UNIQUEIDENTIFIER NOT NULL,
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    created_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    
+    CONSTRAINT FK_room_amenity_mapping_room FOREIGN KEY (room_id)
+        REFERENCES room(room_id) ON DELETE CASCADE,
+    CONSTRAINT FK_room_amenity_mapping_amenity FOREIGN KEY (amenity_id)
+        REFERENCES room_amenity(amenity_id) ON DELETE CASCADE,
+    CONSTRAINT UQ_room_amenity_mapping UNIQUE (room_id, amenity_id)
+);
+
+-- ============================================================
 -- ACADEMIC YEAR
 -- ============================================================
 CREATE TABLE academic_year (
@@ -629,17 +663,13 @@ CREATE TABLE student_health_insurance (
 );
 
 -- ============================================================
--- PAYMENT
+-- PAYMENT_ENROLLMENT (Course Tuition Payments)
 -- ============================================================
-CREATE TABLE payment (
+CREATE TABLE payment_enrollment (
     payment_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    student_id UNIQUEIDENTIFIER NOT NULL,
-    payment_type NVARCHAR(50) NOT NULL CHECK (payment_type IN ('course_tuition', 'health_insurance')),
-    enrollment_id UNIQUEIDENTIFIER NULL,
-    insurance_id UNIQUEIDENTIFIER NULL,
-    amount NUMERIC(15,2) NOT NULL CHECK (amount >= 0),
+    enrollment_id UNIQUEIDENTIFIER NOT NULL,
+    payment_type NVARCHAR(50) NOT NULL CHECK (payment_type IN ('cash', 'qr')),
     payment_date DATETIME2 NOT NULL DEFAULT GETDATE(),
-    payment_method NVARCHAR(50) NOT NULL CHECK (payment_method IN ('bank_transfer', 'cash', 'online', 'credit_card', 'e_wallet')),
     notes NVARCHAR(500),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
@@ -649,16 +679,29 @@ CREATE TABLE payment (
     is_deleted BIT NOT NULL DEFAULT 0,
     is_active BIT NOT NULL DEFAULT 1,
 
-    CONSTRAINT FK_payment_student FOREIGN KEY (student_id) 
-        REFERENCES student(student_id) ON DELETE CASCADE,
-    CONSTRAINT FK_payment_enrollment FOREIGN KEY (enrollment_id) 
-        REFERENCES student_enrollment(enrollment_id) ON DELETE NO ACTION,
-    CONSTRAINT FK_payment_insurance FOREIGN KEY (insurance_id) 
-        REFERENCES student_health_insurance(insurance_id) ON DELETE NO ACTION,
-    CONSTRAINT CHK_payment_type_mapping CHECK (
-        (payment_type = 'course_tuition' AND enrollment_id IS NOT NULL AND insurance_id IS NULL) OR
-        (payment_type = 'health_insurance' AND insurance_id IS NOT NULL AND enrollment_id IS NULL)
-    )
+    CONSTRAINT FK_payment_enrollment_enrollment FOREIGN KEY (enrollment_id) 
+        REFERENCES student_enrollment(enrollment_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- PAYMENT_INSURANCE (Health Insurance Payments)
+-- ============================================================
+CREATE TABLE payment_insurance (
+    payment_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    insurance_id UNIQUEIDENTIFIER NOT NULL,
+    payment_type NVARCHAR(50) NOT NULL CHECK (payment_type IN ('cash', 'qr')),
+    payment_date DATETIME2 NOT NULL DEFAULT GETDATE(),
+    notes NVARCHAR(500),
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_payment_insurance_insurance FOREIGN KEY (insurance_id) 
+        REFERENCES student_health_insurance(insurance_id) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -697,6 +740,7 @@ CREATE TABLE regulation (
     regulation_name NVARCHAR(200) NOT NULL,
     target NVARCHAR(20) NOT NULL CHECK (target IN ('student', 'instructor')),
     pdf_file_path NVARCHAR(1000) NOT NULL,
+    regulation_description NVARCHAR(1000) NOT NULL,
 	expire_date DATE NULL,
     created_by_admin UNIQUEIDENTIFIER NOT NULL,
 
@@ -708,4 +752,62 @@ CREATE TABLE regulation (
 
     CONSTRAINT FK_regulation_created_by_admin FOREIGN KEY (created_by_admin) 
         REFERENCES admin(admin_id) ON DELETE NO ACTION
+);
+
+-- ============================================================
+-- STUDENT_VERIFICATION_REQUEST
+-- ============================================================
+CREATE TABLE student_verification_request (
+    verification_request_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    student_id UNIQUEIDENTIFIER NOT NULL,
+    language NVARCHAR(2) NOT NULL DEFAULT 'vi' CHECK (language IN ('vi', 'en')),
+    reason NVARCHAR(500) NOT NULL,
+    request_status NVARCHAR(20) DEFAULT 'pending' CHECK (request_status IN ('pending', 'approved', 'rejected', 'completed')),
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_verification_request_student FOREIGN KEY (student_id)
+        REFERENCES student(student_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- PAYMENT_POSTPONEMENT_REQUEST
+-- ============================================================
+CREATE TABLE payment_postponement_request (
+    request_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    student_id UNIQUEIDENTIFIER NOT NULL,
+    semester_id UNIQUEIDENTIFIER NOT NULL,
+    request_date DATETIME2 NOT NULL DEFAULT GETDATE(),
+    reason NVARCHAR(500) NOT NULL,
+    request_status NVARCHAR(20) DEFAULT 'pending' CHECK (request_status IN ('pending', 'approved', 'rejected', 'cancelled')),
+    new_payment_deadline DATE NULL,
+    
+    -- Admin who reviewed/processed the request
+    reviewed_by UNIQUEIDENTIFIER NULL,
+    reviewed_at DATETIME2 NULL,
+    review_notes NVARCHAR(500) NULL,
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_payment_postponement_student FOREIGN KEY (student_id)
+        REFERENCES student(student_id) ON DELETE CASCADE,
+    CONSTRAINT FK_payment_postponement_semester FOREIGN KEY (semester_id) 
+        REFERENCES semester(semester_id) ON DELETE CASCADE,
+    CONSTRAINT FK_payment_postponement_reviewed_by FOREIGN KEY (reviewed_by)
+        REFERENCES admin(admin_id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT CHK_reviewed_at_when_processed CHECK (
+        (request_status = 'pending' AND reviewed_by IS NULL AND reviewed_at IS NULL) OR
+        (request_status IN ('approved', 'rejected') AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
+        (request_status = 'cancelled')
+    )
 );
