@@ -795,7 +795,6 @@ class SQLDataGenerator:
         
         enrollment_payment_rows = []
         insurance_payment_rows = []
-        payment_types = ['cash', 'qr']  # Only cash and qr as per schema
         
         # 1. COURSE TUITION PAYMENTS (payment_enrollment)
         self.add_statement("\n-- Generating course tuition payments...")
@@ -811,7 +810,6 @@ class SQLDataGenerator:
                 enrollment_payment_rows.append([
                     payment_id,
                     enrollment['enrollment_id'],
-                    random.choice(payment_types),
                     payment_date,
                     f'Thanh toán học phí - {enrollment.get("subject_code", "")}'
                 ])
@@ -829,7 +827,6 @@ class SQLDataGenerator:
                 insurance_payment_rows.append([
                     payment_id,
                     insurance['insurance_id'],
-                    random.choice(payment_types),
                     payment_date,
                     'Thanh toán bảo hiểm y tế sinh viên'
                 ])
@@ -839,11 +836,11 @@ class SQLDataGenerator:
         
         # Insert into separate tables
         self.bulk_insert('payment_enrollment',
-                        ['payment_id', 'enrollment_id', 'payment_type', 'payment_date', 'notes'],
+                        ['payment_id', 'enrollment_id', 'payment_date', 'notes'],
                         enrollment_payment_rows)
         
         self.bulk_insert('payment_insurance',
-                        ['payment_id', 'insurance_id', 'payment_type', 'payment_date', 'notes'],
+                        ['payment_id', 'insurance_id', 'payment_date', 'notes'],
                         insurance_payment_rows)
 
     # ==================== CURRICULUM MAPPING ====================

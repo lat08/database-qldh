@@ -668,7 +668,6 @@ CREATE TABLE student_health_insurance (
 CREATE TABLE payment_enrollment (
     payment_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     enrollment_id UNIQUEIDENTIFIER NOT NULL,
-    payment_type NVARCHAR(50) NOT NULL CHECK (payment_type IN ('cash', 'qr')),
     payment_date DATETIME2 NOT NULL DEFAULT GETDATE(),
     notes NVARCHAR(500),
 
@@ -689,7 +688,6 @@ CREATE TABLE payment_enrollment (
 CREATE TABLE payment_insurance (
     payment_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     insurance_id UNIQUEIDENTIFIER NOT NULL,
-    payment_type NVARCHAR(50) NOT NULL CHECK (payment_type IN ('cash', 'qr')),
     payment_date DATETIME2 NOT NULL DEFAULT GETDATE(),
     notes NVARCHAR(500),
 
