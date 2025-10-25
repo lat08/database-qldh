@@ -116,7 +116,22 @@ CREATE TABLE room (
     room_code NVARCHAR(50) NOT NULL UNIQUE,
     room_name NVARCHAR(200) NOT NULL,
     capacity INT NOT NULL CHECK (capacity > 0),
-    room_type NVARCHAR(20) NOT NULL CHECK (room_type IN ('lecture_hall', 'classroom', 'computer_lab', 'laboratory')),
+    room_type NVARCHAR(30) NOT NULL 
+        CHECK (room_type IN (
+			'exam',
+            'lecture_hall',      -- giảng đường
+            'classroom',         -- phòng học
+            'computer_lab',      -- phòng máy tính
+            'laboratory',        -- phòng thí nghiệm
+            'meeting_room',      -- phòng họp
+            'gym_room',          -- phòng thể dục
+            'swimming_pool',     -- hồ bơi
+            'music_room',        -- phòng âm nhạc
+            'art_room',          -- phòng mỹ thuật
+            'library_room',      -- phòng thư viện
+            'self_study_room',   -- phòng tự học
+            'dorm_room'          -- ký túc xá / phòng ở
+        )),
     building_id UNIQUEIDENTIFIER NOT NULL,
     room_status NVARCHAR(20) DEFAULT 'active' CHECK (room_status IN ('active', 'inactive', 'maintenance')),
 
@@ -809,3 +824,86 @@ CREATE TABLE payment_postponement_request (
         (request_status = 'cancelled')
     )
 );
+
+CREATE TABLE theme_configurations (
+    theme_config_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    
+    -- Metadata
+    theme_name NVARCHAR(200) NOT NULL,
+    description NVARCHAR(MAX),
+    created_by_admin_id UNIQUEIDENTIFIER NOT NULL,
+    
+    -- Scope (page/component specific)
+    scope_type NVARCHAR(50) NOT NULL CHECK (scope_type IN ('global', 'page', 'component')),
+    scope_target NVARCHAR(200), -- e.g., 'student-dashboard', 'header', 'sidebar'
+    
+    -- Theme variables (JSON format)
+    theme_variables NVARCHAR(MAX) NOT NULL,
+    -- Example: 
+    -- {
+    --   "primary": "#4E8EE1",
+    --   "primary_foreground": "#ffffff",
+    --   "secondary": "#f5f5f5",
+    --   "background": "#ffffff",
+    --   "sidebar": "#1a1a1a",
+    --   ...
+    -- }
+    
+    -- Standard audit fields
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+    
+    -- Constraints
+    CONSTRAINT UQ_theme_scope_active UNIQUE(scope_type, scope_target, is_active),
+    CONSTRAINT FK_theme_created_by FOREIGN KEY (created_by_admin_id)
+        REFERENCES dbo.admin(admin_id) ON DELETE NO ACTION,
+    CONSTRAINT CHK_theme_name_not_empty CHECK (LEN(TRIM(theme_name)) > 0),
+    CONSTRAINT CHK_theme_variables_json CHECK (ISJSON(theme_variables) = 1)
+);
+
+-- Indexes
+CREATE INDEX idx_theme_active ON theme_configurations(is_active) WHERE is_active = 1;
+CREATE INDEX idx_theme_scope ON theme_configurations(scope_type, scope_target);
+CREATE INDEX idx_theme_created_by ON theme_configurations(created_by_admin_id);
+
+-- ============================================================
+-- THEME HISTORY
+-- ============================================================
+CREATE TABLE theme_history (
+    theme_history_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    theme_config_id UNIQUEIDENTIFIER NOT NULL,
+    action NVARCHAR(50) NOT NULL CHECK (action IN ('created', 'updated', 'activated', 'deactivated', 'deleted')),
+    changed_by_admin_id UNIQUEIDENTIFIER NOT NULL,
+    previous_values NVARCHAR(MAX), -- JSON string
+    new_values NVARCHAR(MAX), -- JSON string
+    change_reason NVARCHAR(500),
+    
+    -- Standard audit fields
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+    
+    -- Foreign key constraints
+    CONSTRAINT FK_theme_history_config FOREIGN KEY (theme_config_id)
+        REFERENCES theme_configurations(theme_config_id) ON DELETE CASCADE,
+    CONSTRAINT FK_theme_history_admin FOREIGN KEY (changed_by_admin_id)
+        REFERENCES dbo.admin(admin_id) ON DELETE NO ACTION,
+    
+    -- Additional constraints
+    CONSTRAINT CHK_theme_history_action_not_empty CHECK (LEN(TRIM(action)) > 0),
+    CONSTRAINT CHK_theme_history_previous_json CHECK (previous_values IS NULL OR ISJSON(previous_values) = 1),
+    CONSTRAINT CHK_theme_history_new_json CHECK (new_values IS NULL OR ISJSON(new_values) = 1)
+);
+
+-- Indexes
+CREATE INDEX idx_theme_history_config ON theme_history(theme_config_id);
+CREATE INDEX idx_theme_history_admin ON theme_history(changed_by_admin_id);
+CREATE INDEX idx_theme_history_action ON theme_history(action);
+CREATE INDEX idx_theme_history_created ON theme_history(created_at);

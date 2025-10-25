@@ -36,14 +36,19 @@ class SpecParser:
                 if line.startswith('[') and line.endswith(']'):
                     self.current_section = line[1:-1]
                     self.data[self.current_section] = []
-                elif self.current_section and ':' in line:
-                    key, value = line.split(':', 1)
-                    self.data.setdefault(self.current_section + '_config', {})[key.strip()] = value.strip()
+                # IMPORTANT: Check for pipe FIRST (before colon)
+                # This prevents URLs with colons from being parsed as config
                 elif self.current_section and '|' in line:
                     self.data[self.current_section].append(line)
+                # Then check for colon (for config lines)
+                elif self.current_section and ':' in line:
+                    # Make sure it's a config line (key: value format)
+                    if line.count(':') >= 1 and not line.startswith('http'):
+                        key, value = line.split(':', 1)
+                        self.data.setdefault(self.current_section + '_config', {})[key.strip()] = value.strip()
         
         return self.data
-
+    
 class SQLDataGenerator:
     def __init__(self, spec_file):
         self.spec_file = spec_file
@@ -65,8 +70,10 @@ class SQLDataGenerator:
             'courses': [],
             'buildings': [],
             'rooms': [],
+            'amenities': [],
             'course_classes': [],
-            'fixed_accounts': {}
+            'fixed_accounts': {},
+            'regulations': []
         }
         
         # Parse spec config
@@ -118,7 +125,78 @@ class SQLDataGenerator:
     def create_password_hash(self, password, salt_bytes):
         h = hmac.new(salt_bytes, password.encode('utf-8'), hashlib.sha512)
         return base64.b64encode(h.digest()).decode('utf-8')
-    
+
+    def create_regulations(self):
+        """
+        Generate regulation records from spec file
+        """
+        self.add_statement("\n-- ==================== REGULATIONS ====================")
+        
+        regulation_rows = []
+        
+        # Get admin for created_by - using simple ID
+        admin_id = self.data['fixed_accounts']['admin']['admin_id']
+        
+        self.add_statement(f"-- Using admin_id: {admin_id}")
+        self.add_statement(f"-- Found {len(self.spec_data.get('regulations', []))} regulation entries in spec")
+        
+        for line in self.spec_data.get('regulations', []):
+            parts = [p.strip() for p in line.split('|')]
+            
+            if len(parts) < 4:
+                self.add_statement(f"-- WARNING: Invalid regulation line (need at least 4 parts): {line[:100]}...")
+                continue
+            
+            regulation_name = parts[0]
+            target = parts[1]
+            pdf_path = parts[2]
+            description = parts[3]
+            expire_date = None
+            
+            # Handle expire_date (5th part is optional)
+            if len(parts) > 4:
+                expire_val = parts[4].strip()
+                if expire_val and expire_val.upper() != 'NULL':
+                    try:
+                        expire_date = datetime.strptime(expire_val, '%Y-%m-%d').date()
+                    except:
+                        expire_date = None
+            
+            # Validate target
+            if target not in ['student', 'instructor']:
+                self.add_statement(f"-- WARNING: Invalid target '{target}' for regulation: {regulation_name}")
+                continue
+            
+            regulation_id = self.generate_uuid()
+            
+            self.data['regulations'].append({
+                'regulation_id': regulation_id,
+                'regulation_name': regulation_name,
+                'target': target
+            })
+            
+            regulation_rows.append([
+                regulation_id,
+                regulation_name,
+                target,
+                pdf_path,
+                description,
+                expire_date,
+                admin_id  # Using simple predictable admin_id
+            ])
+            
+            self.add_statement(f"-- Added: {regulation_name} (target: {target})")
+        
+        self.add_statement(f"-- Total regulations to insert: {len(regulation_rows)}")
+        
+        if len(regulation_rows) > 0:
+            self.bulk_insert('regulation',
+                            ['regulation_id', 'regulation_name', 'target', 'pdf_file_path', 
+                            'regulation_description', 'expire_date', 'created_by_admin'],
+                            regulation_rows)
+        else:
+            self.add_statement("-- WARNING: No regulations to insert!")
+
     # ==================== PERMISSIONS ====================
     def create_permissions(self):
         self.add_statement("\n-- ==================== PERMISSIONS ====================")
@@ -159,16 +237,19 @@ class SQLDataGenerator:
         self.add_statement(f"-- Password: {password}")
         self.add_statement(f"-- Salt: {salt_b64}")
         self.add_statement(f"-- Hash: {password_hash}")
+        self.add_statement("-- Using SIMPLE PREDICTABLE IDs for easy testing")
         
         person_rows = []
         user_rows = []
         instructor_rows = []
         admin_rows = []
         
-        # INSTRUCTOR
-        person_id = self.generate_uuid()
-        user_id = self.generate_uuid()
-        instructor_id = self.generate_uuid()
+        # ============================================================
+        # INSTRUCTOR - Simple IDs
+        # ============================================================
+        person_id = self.test_config.get('instructor_person_id', '00000000-0000-0000-0000-000000000011')
+        user_id = self.test_config.get('instructor_user_id', '00000000-0000-0000-0000-000000000012')
+        instructor_id = self.test_config.get('instructor_id', '00000000-0000-0000-0000-000000000013')
         
         self.data['fixed_accounts']['instructor'] = {
             'person_id': person_id,
@@ -187,11 +268,9 @@ class SQLDataGenerator:
                         instructor_citizen_id,
                         'TP Hồ Chí Minh'])
         
-        # FIXED: Changed 'status' to 'account_status'
         user_rows.append([user_id, person_id, self.test_config.get('instructor_username'),
                         password_hash, salt_b64, 'Instructor', 'active'])
         
-        # FIXED: Changed 'status' to 'employment_status'
         instructor_rows.append([instructor_id, person_id, self.test_config.get('instructor_code'),
                             self.test_config.get('instructor_degree'), 
                             self.test_config.get('instructor_specialization', 'Công nghệ thông tin'),
@@ -201,12 +280,20 @@ class SQLDataGenerator:
         self.data['instructors'].append({'instructor_id': instructor_id, 'person_id': person_id,
                                         'full_name': self.test_config.get('instructor_name')})
         
-        # ADMIN
-        person_id = self.generate_uuid()
-        user_id = self.generate_uuid()
-        admin_id = self.generate_uuid()
+        self.add_statement(f"-- INSTRUCTOR IDs: person={person_id}, user={user_id}, instructor={instructor_id}")
         
-        self.data['fixed_accounts']['admin'] = {'person_id': person_id, 'user_id': user_id, 'admin_id': admin_id}
+        # ============================================================
+        # ADMIN - Simple IDs
+        # ============================================================
+        person_id = self.test_config.get('admin_person_id', '00000000-0000-0000-0000-000000000021')
+        user_id = self.test_config.get('admin_user_id', '00000000-0000-0000-0000-000000000022')
+        admin_id = self.test_config.get('admin_id', '00000000-0000-0000-0000-000000000023')
+        
+        self.data['fixed_accounts']['admin'] = {
+            'person_id': person_id, 
+            'user_id': user_id, 
+            'admin_id': admin_id
+        }
         
         admin_citizen_id = f"{random.randint(100000000000, 999999999999)}"
         
@@ -218,24 +305,21 @@ class SQLDataGenerator:
                         admin_citizen_id,
                         'TP Hồ Chí Minh'])
         
-        # FIXED: Changed 'status' to 'account_status'
         user_rows.append([user_id, person_id, self.test_config.get('admin_username'),
                         password_hash, salt_b64, 'Admin', 'active'])
         
-        # FIXED: Changed 'status' to 'admin_status'
-        admin_rows.append([admin_id, person_id, self.test_config.get('admin_code'),
-                        self.test_config.get('admin_position'), 'active'])
-        
+        admin_rows.append([admin_id, person_id, self.test_config.get('admin_code'), self.test_config.get('admin_position'), 'active'])
+    
         self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
         
+        self.add_statement(f"-- ADMIN IDs: person={person_id}, user={user_id}, admin={admin_id}")
+        
+        # Insert all fixed accounts
         self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address'], person_rows)
-        # FIXED: Changed 'status' to 'account_status'
         self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
-        # FIXED: Changed 'status' to 'employment_status', added specialization and department_id
         self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
-        # FIXED: Changed 'status' to 'admin_status'
         self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
-
+                       
     def create_regular_staff(self):
         self.add_statement("\n-- ==================== REGULAR INSTRUCTORS & ADMINS ====================")
         
@@ -915,7 +999,7 @@ class SQLDataGenerator:
         user_rows = []
         student_rows = []
         
-        # Fixed STUDENT account
+        # Fixed STUDENT account - Simple IDs
         password = self.test_config.get('password')
         salt_b64 = self.test_config.get('salt_base64')
         salt_bytes = base64.b64decode(salt_b64)
@@ -925,9 +1009,9 @@ class SQLDataGenerator:
         target_class = next((c for c in self.data['classes'] if c['start_year'] == target_class_year), None)
         
         if target_class:
-            person_id = self.generate_uuid()
-            user_id = self.generate_uuid()
-            student_id = self.generate_uuid()
+            person_id = self.test_config.get('student_person_id', '00000000-0000-0000-0000-000000000001')
+            user_id = self.test_config.get('student_user_id', '00000000-0000-0000-0000-000000000002')
+            student_id = self.test_config.get('student_id', '00000000-0000-0000-0000-000000000003')
             
             self.data['fixed_accounts']['student'] = {
                 'person_id': person_id,
@@ -947,11 +1031,9 @@ class SQLDataGenerator:
                             fixed_student_citizen_id,
                             'TP Hồ Chí Minh'])
             
-            # FIXED: Changed 'status' to 'account_status'
             user_rows.append([user_id, person_id, self.test_config.get('student_username'),
                             password_hash, salt_b64, 'Student', 'active'])
             
-            # FIXED: Changed 'status' to 'enrollment_status'
             student_rows.append([student_id, person_id, self.test_config.get('student_code'),
                                 target_class['class_id'], 'active'])
             
@@ -965,8 +1047,9 @@ class SQLDataGenerator:
             })
             
             self.add_statement(f"-- Fixed STUDENT: {self.test_config.get('student_username')}")
+            self.add_statement(f"-- STUDENT IDs: person={person_id}, user={user_id}, student={student_id}")
         
-        # Regular students
+        # Regular students (rest of the function remains the same...)
         for cls in self.data['classes']:
             for i in range(students_per_class):
                 gender = random.choice(['male', 'female'])
@@ -985,12 +1068,10 @@ class SQLDataGenerator:
                 
                 user_id = self.generate_uuid()
                 username = f"sv{global_counter:05d}"
-                # FIXED: Changed 'status' to 'account_status'
                 user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Student', 'active'])
                 
                 student_id = self.generate_uuid()
                 student_code = f"SV{global_counter:06d}"
-                # FIXED: Changed 'status' to 'enrollment_status'
                 student_rows.append([student_id, person_id, student_code, cls['class_id'], 'active'])
                 
                 self.data['students'].append({
@@ -1005,9 +1086,7 @@ class SQLDataGenerator:
                 global_counter += 1
         
         self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address'], person_rows)
-        # FIXED: Changed 'status' to 'account_status'
         self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
-        # FIXED: Changed 'status' to 'enrollment_status'
         self.bulk_insert('student', ['student_id', 'person_id', 'student_code', 'class_id', 'enrollment_status'], student_rows)
 
     def create_buildings_and_rooms(self):
@@ -1015,8 +1094,57 @@ class SQLDataGenerator:
         
         building_rows = []
         room_rows = []
-        room_types = ['lecture_hall', 'classroom', 'computer_lab', 'laboratory']
-        capacities = [30, 40, 50, 60]
+        
+        # Valid room types from schema
+        room_types = [
+            'exam',
+            'lecture_hall',
+            'classroom',
+            'computer_lab',
+            'laboratory',
+            'meeting_room',
+            'gym_room',
+            'swimming_pool',
+            'music_room',
+            'art_room',
+            'library_room',
+            'self_study_room',
+            'dorm_room'
+        ]
+        
+        # Room type distribution (weighted for realistic campus)
+        room_type_weights = {
+            'classroom': 0.35,
+            'lecture_hall': 0.15,
+            'computer_lab': 0.15,
+            'laboratory': 0.10,
+            'exam': 0.10,
+            'meeting_room': 0.05,
+            'self_study_room': 0.05,
+            'library_room': 0.03,
+            'gym_room': 0.01,
+            'music_room': 0.003,
+            'art_room': 0.003,
+            'swimming_pool': 0.001,
+            'dorm_room': 0.003
+        }
+        
+        # Capacity ranges by room type
+        capacity_by_type = {
+            'exam': (50, 100),
+            'lecture_hall': (100, 300),
+            'classroom': (30, 60),
+            'computer_lab': (30, 50),
+            'laboratory': (20, 40),
+            'meeting_room': (10, 30),
+            'gym_room': (50, 100),
+            'swimming_pool': (30, 50),
+            'music_room': (15, 30),
+            'art_room': (20, 40),
+            'library_room': (50, 150),
+            'self_study_room': (20, 50),
+            'dorm_room': (2, 4)
+        }
         
         for line in self.spec_data.get('buildings', []):
             parts = [p.strip() for p in line.split('|')]
@@ -1024,25 +1152,324 @@ class SQLDataGenerator:
             
             building_id = self.generate_uuid()
             self.data['buildings'].append({'building_id': building_id, 'building_name': bldg_name})
-            # FIXED: Changed 'status' to 'building_status'
             building_rows.append([building_id, bldg_name, bldg_code, 'TP Hồ Chí Minh', 'active'])
             
             bldg_letter = bldg_code[-1]
+            
+            # Distribute room types across this building
             for j in range(rooms_count):
                 room_id = self.generate_uuid()
                 room_code = f"{bldg_letter}{j+1:02d}"
-                room_name = f"Phòng {room_code}"
-                capacity = random.choice(capacities)
-                room_type = random.choice(room_types)
                 
-                self.data['rooms'].append({'room_id': room_id, 'room_code': room_code, 'capacity': capacity})
-                # FIXED: Changed 'status' to 'room_status'
-                room_rows.append([room_id, room_code, room_name, capacity, room_type, building_id, 'active'])
+                # Select room type based on weights
+                rand = random.random()
+                cumulative = 0
+                selected_type = 'classroom'  # default
+                
+                for rtype, weight in room_type_weights.items():
+                    cumulative += weight
+                    if rand <= cumulative:
+                        selected_type = rtype
+                        break
+                
+                # Get capacity range for this room type
+                cap_min, cap_max = capacity_by_type.get(selected_type, (30, 60))
+                capacity = random.randint(cap_min, cap_max)
+                
+                # Generate room name based on type
+                room_name_map = {
+                    'exam': 'Phòng thi',
+                    'lecture_hall': 'Giảng đường',
+                    'classroom': 'Phòng học',
+                    'computer_lab': 'Phòng máy tính',
+                    'laboratory': 'Phòng thí nghiệm',
+                    'meeting_room': 'Phòng họp',
+                    'gym_room': 'Phòng thể dục',
+                    'swimming_pool': 'Hồ bơi',
+                    'music_room': 'Phòng âm nhạc',
+                    'art_room': 'Phòng mỹ thuật',
+                    'library_room': 'Phòng thư viện',
+                    'self_study_room': 'Phòng tự học',
+                    'dorm_room': 'Ký túc xá'
+                }
+                
+                room_name = f"{room_name_map.get(selected_type, 'Phòng')} {room_code}"
+                
+                self.data['rooms'].append({
+                    'room_id': room_id, 
+                    'room_code': room_code, 
+                    'room_name': room_name,
+                    'capacity': capacity,
+                    'room_type': selected_type
+                })
+                
+                room_rows.append([
+                    room_id, 
+                    room_code, 
+                    room_name, 
+                    capacity, 
+                    selected_type,  # room_type
+                    building_id, 
+                    'active'
+                ])
         
-        # FIXED: Changed 'status' to 'building_status'
-        self.bulk_insert('building', ['building_id', 'building_name', 'building_code', 'address', 'building_status'], building_rows)
-        # FIXED: Changed 'status' to 'room_status'
-        self.bulk_insert('room', ['room_id', 'room_code', 'room_name', 'capacity', 'room_type', 'building_id', 'room_status'], room_rows)
+        self.add_statement(f"-- Total buildings: {len(building_rows)}")
+        self.add_statement(f"-- Total rooms: {len(room_rows)}")
+        
+        # Room type distribution summary
+        type_counts = {}
+        for room in self.data['rooms']:
+            rtype = room['room_type']
+            type_counts[rtype] = type_counts.get(rtype, 0) + 1
+        
+        self.add_statement("-- Room type distribution:")
+        for rtype, count in sorted(type_counts.items()):
+            self.add_statement(f"--   {rtype}: {count}")
+        
+        self.bulk_insert('building', 
+                        ['building_id', 'building_name', 'building_code', 'address', 'building_status'], 
+                        building_rows)
+        
+        self.bulk_insert('room', 
+                        ['room_id', 'room_code', 'room_name', 'capacity', 'room_type', 'building_id', 'room_status'], 
+                        room_rows)
+
+
+    def create_room_amenities(self):
+        """
+        Create room amenities (facilities/equipment available in rooms)
+        """
+        self.add_statement("\n-- ==================== ROOM AMENITIES ====================")
+        
+        amenity_rows = []
+        
+        # Define standard amenities
+        amenities = [
+            # Basic equipment
+            'Máy chiếu (Projector)',
+            'Bảng trắng (Whiteboard)',
+            'Bảng đen (Blackboard)',
+            'Màn hình chiếu (Projection screen)',
+            'Loa âm thanh (Audio speakers)',
+            'Micro (Microphone)',
+            
+            # Technology
+            'Máy tính giảng viên (Instructor PC)',
+            'Kết nối Internet (Internet connection)',
+            'WiFi',
+            'Hệ thống âm thanh (Sound system)',
+            'Camera giám sát (Security camera)',
+            'Màn hình tương tác (Interactive display)',
+            
+            # Comfort
+            'Điều hòa không khí (Air conditioning)',
+            'Quạt trần (Ceiling fans)',
+            'Cửa sổ lớn (Large windows)',
+            'Rèm che (Curtains/Blinds)',
+            'Ghế có đệm (Cushioned chairs)',
+            'Bàn học điều chỉnh (Adjustable desks)',
+            
+            # Specialized equipment
+            'Thiết bị thí nghiệm (Lab equipment)',
+            'Tủ hóa chất (Chemical storage)',
+            'Máy tính cá nhân (PC stations)',
+            'Bàn vẽ (Drawing tables)',
+            'Nhạc cụ (Musical instruments)',
+            'Thiết bị thể dục (Gym equipment)',
+            'Tủ đồ cá nhân (Personal lockers)',
+            'Giường nằm (Beds)',
+            'Tủ quần áo (Wardrobes)',
+            'Kệ sách (Bookshelves)',
+            'Đèn đọc sách (Reading lights)'
+        ]
+        
+        for amenity_name in amenities:
+            amenity_id = self.generate_uuid()
+            
+            self.data['amenities'].append({
+                'amenity_id': amenity_id,
+                'amenity_name': amenity_name
+            })
+            
+            amenity_rows.append([amenity_id, amenity_name])
+        
+        self.add_statement(f"-- Total amenities: {len(amenity_rows)}")
+        
+        self.bulk_insert('room_amenity',
+                        ['amenity_id', 'amenity_name'],
+                        amenity_rows)
+
+
+    def create_room_amenity_mappings(self):
+        """
+        Map amenities to rooms based on room type
+        """
+        self.add_statement("\n-- ==================== ROOM AMENITY MAPPINGS ====================")
+        
+        mapping_rows = []
+        
+        # Get amenity lookup by name
+        amenity_lookup = {}
+        for amenity in self.data['amenities']:
+            # Extract English part from name for easier matching
+            name = amenity['amenity_name']
+            if '(' in name:
+                key = name.split('(')[0].strip()
+            else:
+                key = name
+            amenity_lookup[key] = amenity['amenity_id']
+        
+        # Define amenities by room type
+        amenities_by_type = {
+            'exam': [
+                'Máy chiếu',
+                'Điều hòa không khí',
+                'Camera giám sát',
+                'Bàn học điều chỉnh',
+                'Ghế có đệm'
+            ],
+            'lecture_hall': [
+                'Máy chiếu',
+                'Màn hình chiếu',
+                'Loa âm thanh',
+                'Micro',
+                'Bảng trắng',
+                'Điều hòa không khí',
+                'Máy tính giảng viên',
+                'Hệ thống âm thanh',
+                'WiFi',
+                'Kết nối Internet'
+            ],
+            'classroom': [
+                'Máy chiếu',
+                'Bảng trắng',
+                'Điều hòa không khí',
+                'WiFi',
+                'Kết nối Internet',
+                'Cửa sổ lớn',
+                'Rèm che'
+            ],
+            'computer_lab': [
+                'Máy tính cá nhân',
+                'Máy chiếu',
+                'Điều hòa không khí',
+                'Bảng trắng',
+                'WiFi',
+                'Kết nối Internet',
+                'Máy tính giảng viên'
+            ],
+            'laboratory': [
+                'Thiết bị thí nghiệm',
+                'Tủ hóa chất',
+                'Bảng trắng',
+                'Điều hòa không khí',
+                'Cửa sổ lớn',
+                'WiFi',
+                'Kết nối Internet'
+            ],
+            'meeting_room': [
+                'Máy chiếu',
+                'Màn hình tương tác',
+                'Bảng trắng',
+                'Điều hòa không khí',
+                'Hệ thống âm thanh',
+                'Micro',
+                'WiFi',
+                'Kết nối Internet',
+                'Ghế có đệm'
+            ],
+            'gym_room': [
+                'Thiết bị thể dục',
+                'Tủ đồ cá nhân',
+                'Quạt trần',
+                'Cửa sổ lớn'
+            ],
+            'swimming_pool': [
+                'Tủ đồ cá nhân',
+                'Camera giám sát'
+            ],
+            'music_room': [
+                'Nhạc cụ',
+                'Hệ thống âm thanh',
+                'Loa âm thanh',
+                'Điều hòa không khí',
+                'Cửa sổ lớn',
+                'Tủ đồ cá nhân'
+            ],
+            'art_room': [
+                'Bàn vẽ',
+                'Cửa sổ lớn',
+                'Rèm che',
+                'Tủ đồ cá nhân',
+                'Điều hòa không khí'
+            ],
+            'library_room': [
+                'Kệ sách',
+                'Đèn đọc sách',
+                'Điều hòa không khí',
+                'WiFi',
+                'Kết nối Internet',
+                'Máy tính cá nhân',
+                'Cửa sổ lớn'
+            ],
+            'self_study_room': [
+                'Bàn học điều chỉnh',
+                'Ghế có đệm',
+                'Đèn đọc sách',
+                'Điều hòa không khí',
+                'WiFi',
+                'Kết nối Internet',
+                'Cửa sổ lớn',
+                'Rèm che'
+            ],
+            'dorm_room': [
+                'Giường nằm',
+                'Tủ quần áo',
+                'Bàn học điều chỉnh',
+                'Ghế có đệm',
+                'Điều hòa không khí',
+                'Cửa sổ lớn',
+                'WiFi',
+                'Kết nối Internet'
+            ]
+        }
+        
+        # Map amenities to rooms
+        for room in self.data['rooms']:
+            room_type = room['room_type']
+            amenity_names = amenities_by_type.get(room_type, [])
+            
+            for amenity_name in amenity_names:
+                amenity_id = amenity_lookup.get(amenity_name)
+                
+                if amenity_id:
+                    mapping_id = self.generate_uuid()
+                    
+                    mapping_rows.append([
+                        mapping_id,
+                        room['room_id'],
+                        amenity_id
+                    ])
+        
+        self.add_statement(f"-- Total room-amenity mappings: {len(mapping_rows)}")
+        
+        # Statistics
+        mappings_per_room_type = {}
+        for room in self.data['rooms']:
+            rtype = room['room_type']
+            room_mappings = [m for m in mapping_rows if m[1] == room['room_id']]
+            if rtype not in mappings_per_room_type:
+                mappings_per_room_type[rtype] = []
+            mappings_per_room_type[rtype].append(len(room_mappings))
+        
+        self.add_statement("-- Average amenities per room type:")
+        for rtype, counts in sorted(mappings_per_room_type.items()):
+            avg = sum(counts) / len(counts) if counts else 0
+            self.add_statement(f"--   {rtype}: {avg:.1f} amenities")
+        
+        self.bulk_insert('room_amenity_mapping',
+                        ['room_amenity_mapping_id', 'room_id', 'amenity_id'],
+                        mapping_rows)
 
     def create_courses(self):
         self.add_statement("\n-- ==================== COURSES ====================")
@@ -1819,6 +2246,8 @@ class SQLDataGenerator:
         self.create_faculties_and_departments()
         self.create_academic_years_and_semesters()
         self.create_buildings_and_rooms()
+        self.create_room_amenities()
+        self.create_room_amenity_mappings()
         
         # Academic structure
         self.create_classes()
@@ -1840,6 +2269,9 @@ class SQLDataGenerator:
         self.create_payments()  # NEW
         self.create_schedule_changes()  # NEW
         self.create_notifications()  # NEW
+
+        # Regulations
+        self.create_regulations()
         
         self.add_statement("\n-- ============================================================")
         self.add_statement("-- GENERATION COMPLETE - STATISTICS")
@@ -1850,6 +2282,7 @@ class SQLDataGenerator:
         self.add_statement(f"-- Course Classes: {len(self.data['course_classes'])}")
         self.add_statement(f"-- Buildings: {len(self.data['buildings'])}")
         self.add_statement(f"-- Rooms: {len(self.data['rooms'])}")
+        self.add_statement(f"-- Regulations: {len(self.data['regulations'])}")
         
         return '\n'.join(self.sql_statements)
 

@@ -10,19 +10,6 @@ skinparam class {
 }
 
 ' Level 0 tables
-class admin {
-  admin_id
-  person_id
-  admin_code
-  position
-  admin_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-}
 class curriculum_detail {
   curriculum_detail_id
   department_id
@@ -110,16 +97,41 @@ class notification_schedule {
   is_deleted
   is_active
 }
-class payment {
+class payment_enrollment {
   payment_id
-  student_id
-  payment_type
   enrollment_id
-  insurance_id
-  amount
   payment_date
-  payment_method
   notes
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+}
+class payment_insurance {
+  payment_id
+  insurance_id
+  payment_date
+  notes
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+}
+class payment_postponement_request {
+  request_id
+  student_id
+  semester_id
+  request_date
+  reason
+  request_status
+  new_payment_deadline
+  reviewed_by
+  reviewed_at
+  review_notes
   created_at
   updated_at
   created_by
@@ -139,6 +151,29 @@ class permission {
   updated_by
   is_deleted
   is_active
+}
+class regulation {
+  regulation_id
+  regulation_name
+  target
+  pdf_file_path
+  regulation_description
+  expire_date
+  created_by_admin
+  created_at
+  updated_at
+  updated_by
+  is_deleted
+  is_active
+}
+class room_amenity_mapping {
+  room_amenity_mapping_id
+  room_id
+  amenity_id
+  created_at
+  created_by
+  is_deleted
+  CONSTRAINT
 }
 class room_booking {
   booking_id
@@ -177,6 +212,19 @@ class schedule_change {
   is_active
   CONSTRAINT
 }
+class student_verification_request {
+  verification_request_id
+  student_id
+  language
+  reason
+  request_status
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+}
 class subject {
   subject_id
   subject_name
@@ -194,6 +242,25 @@ class subject {
   updated_by
   is_deleted
   is_active
+}
+class theme_history {
+  theme_history_id
+  theme_config_id
+  action
+  changed_by_admin_id
+  previous_values
+  new_values
+  change_reason
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+  CONSTRAINT
+  CONSTRAINT
+  CONSTRAINT
+  CONSTRAINT
 }
 class user_otp {
   otp_id
@@ -213,6 +280,19 @@ class user_refresh_token {
 }
 
 ' Level 1 tables
+class admin {
+  admin_id
+  person_id
+  admin_code
+  position
+  admin_status
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+}
 class exam {
   exam_id
   course_id
@@ -222,6 +302,16 @@ class exam {
   answer_key_pdf
   notes
   is_approved
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+}
+class room_amenity {
+  amenity_id
+  amenity_name
   created_at
   updated_at
   created_by
@@ -264,6 +354,25 @@ class student_health_insurance {
   updated_by
   is_deleted
   is_active
+  CONSTRAINT
+  CONSTRAINT
+}
+class theme_configurations {
+  theme_config_id
+  theme_name
+  description
+  created_by_admin_id
+  scope_type
+  scope_target
+  theme_variables
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+  CONSTRAINT
+  CONSTRAINT
   CONSTRAINT
   CONSTRAINT
 }
@@ -458,6 +567,8 @@ person --> user_account
 user_account --> user_otp
 user_account --> user_refresh_token
 building --> room
+room --> room_amenity_mapping
+room_amenity --> room_amenity_mapping
 academic_year --> semester
 faculty --> department
 person --> instructor
@@ -491,9 +602,14 @@ room --> exam_class
 instructor --> exam_class
 student --> student_health_insurance
 academic_year --> student_health_insurance
-student --> payment
-student_enrollment --> payment
-student_health_insurance --> payment
+student_enrollment --> payment_enrollment
+student_health_insurance --> payment_insurance
 room --> room_booking
 user_account --> room_booking
+admin --> regulation
+student --> student_verification_request
+student --> payment_postponement_request
+semester --> payment_postponement_request
+admin --> payment_postponement_request
+theme_configurations --> theme_history
 @enduml

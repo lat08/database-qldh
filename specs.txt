@@ -3,12 +3,16 @@
 # Lines starting with # are comments
 
 # ============================================================
-# FIXED TEST ACCOUNTS
+# FIXED TEST ACCOUNTS - SIMPLE PREDICTABLE IDs
 # ============================================================
 [test_accounts]
 password: 123456
 salt_base64: MTExMQ==
 
+# STUDENT account - Simple IDs for easy testing
+student_person_id: 00000000-0000-0000-0000-000000000001
+student_user_id: 00000000-0000-0000-0000-000000000002
+student_id: 00000000-0000-0000-0000-000000000003
 student_username: STUDENT
 student_email: student.test@edu.vn
 student_name: Nguyễn Văn Test Student
@@ -18,6 +22,10 @@ student_dob: 2005-01-15
 student_phone: 0901234567
 student_class_year: 2023
 
+# INSTRUCTOR account - Simple IDs for easy testing
+instructor_person_id: 00000000-0000-0000-0000-000000000011
+instructor_user_id: 00000000-0000-0000-0000-000000000012
+instructor_id: 00000000-0000-0000-0000-000000000013
 instructor_username: INSTRUCTOR
 instructor_email: instructor.test@edu.vn
 instructor_name: Trần Thị Test Instructor
@@ -26,8 +34,13 @@ instructor_gender: female
 instructor_dob: 1985-03-20
 instructor_phone: 0907654321
 instructor_degree: Tiến sĩ
+instructor_specialization: Công nghệ thông tin
 instructor_hire_date: 2015-09-01
 
+# ADMIN account - Simple IDs for easy testing
+admin_person_id: 00000000-0000-0000-0000-000000000021
+admin_user_id: 00000000-0000-0000-0000-000000000022
+admin_id: 00000000-0000-0000-0000-000000000023
 admin_username: ADMIN
 admin_email: admin.test@edu.vn
 admin_name: Lê Minh Test Admin
@@ -227,7 +240,7 @@ spring_offering_rate: 0.7
 summer_offering_rate: 0.3
 
 # Fee per credit
-fee_per_credit: 60
+fee_per_credit: 600000
 
 # ============================================================
 # ENROLLMENT RULES
@@ -256,7 +269,29 @@ last_names_male: Hùng, Dũng, Nam, Cường, Tuấn, Bình, Long, Khang, Phong,
 last_names_female: Lan, Hương, Mai, Linh, Nga, Phương, Trang, Hà, Oanh, Thảo, Chi, Nhung
 
 # ============================================================
+# REGULATIONS
+# ============================================================
+[regulations]
+# Format: RegulationName | Target | PDFPath | Description | ExpireDate(optional)
+
+Quy chế tuyển sinh và đào tạo Thạc sĩ | student | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Admission_and_Training_Regulations_for_Master's_Programs.pdf | Quy định chi tiết về quy trình tuyển sinh, điều kiện dự tuyển, hình thức đào tạo, chương trình học, thời gian đào tạo, điều kiện tốt nghiệp và cấp bằng cho sinh viên theo học chương trình Thạc sĩ. Bao gồm các quy định về luận văn, hội đồng chấm luận văn, tiêu chuẩn đầu ra và quyền lợi của học viên cao học. | NULL
+
+Quy chế tuyển sinh và đào tạo Thạc sĩ | instructor | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Admission_and_Training_Regulations_for_Master's_Programs.pdf | Quy định chi tiết về quy trình tuyển sinh, điều kiện dự tuyển, hình thức đào tạo, chương trình học, thời gian đào tạo, điều kiện tốt nghiệp và cấp bằng cho sinh viên theo học chương trình Thạc sĩ. Bao gồm các quy định về luận văn, hội đồng chấm luận văn, tiêu chuẩn đầu ra và quyền lợi của học viên cao học. | NULL
+
+Quy định sử dụng cơ sở vật chất | student | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Regulations_on_the_Use_of_Facilities.pdf | Quy định về việc sử dụng và quản lý các cơ sở vật chất của trường bao gồm phòng học, giảng đường, thư viện, phòng thí nghiệm, phòng máy tính, khu thể thao, ký túc xá. Hướng dẫn đăng ký sử dụng, quy tắc ứng xử, bảo quản tài sản, xử lý vi phạm và trách nhiệm của sinh viên khi sử dụng các tiện ích chung của nhà trường. | NULL
+
+Quy định sử dụng cơ sở vật chất | instructor | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Regulations_on_the_Use_of_Facilities.pdf | Quy định về việc sử dụng và quản lý các cơ sở vật chất của trường bao gồm phòng học, giảng đường, thư viện, phòng thí nghiệm, phòng máy tính, khu thể thao, ký túc xá. Hướng dẫn đăng ký sử dụng, quy tắc ứng xử, bảo quản tài sản, xử lý vi phạm và trách nhiệm của sinh viên khi sử dụng các tiện ích chung của nhà trường. | NULL
+
+Quy định học phí và chính sách miễn giảm | student | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Tuition_Fees_and_Exemption_Policies.pdf | Quy định mức học phí theo từng ngành đào tạo, hình thức thanh toán, thời hạn nộp học phí, chính sách miễn giảm học phí cho sinh viên diện chính sách, sinh viên có thành tích học tập xuất sắc, sinh viên thuộc hộ nghèo, cận nghèo. Hướng dẫn thủ tục xin hoãn nộp học phí, xin hỗ trợ tài chính, vay vốn ngân hàng và các chế độ học bổng khác. | 2026-12-31
+
+Quy định học phí và chính sách miễn giảm | instructor | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Tuition_Fees_and_Exemption_Policies.pdf | Quy định mức học phí theo từng ngành đào tạo, hình thức thanh toán, thời hạn nộp học phí, chính sách miễn giảm học phí cho sinh viên diện chính sách, sinh viên có thành tích học tập xuất sắc, sinh viên thuộc hộ nghèo, cận nghèo. Hướng dẫn thủ tục xin hoãn nộp học phí, xin hỗ trợ tài chính, vay vốn ngân hàng và các chế độ học bổng khác. | 2026-12-31
+
+Quy chế đào tạo đại học hệ chính quy | student | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Undergraduate_Training_Regulations.pdf | Quy định toàn diện về hệ thống đào tạo đại học chính quy bao gồm chương trình khung, phương thức tổ chức dạy và học, quy định về tín chỉ, đăng ký học phần, điều kiện dự thi, hình thức kiểm tra đánh giá, quy đổi điểm, xếp loại học lực. Các quy định về chuyển ngành, chuyển trường, tạm ngừng học, thôi học, điều kiện công nhận tốt nghiệp và cấp bằng tốt nghiệp đại học. | NULL
+
+Quy chế đào tạo đại học hệ chính quy | instructor | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Undergraduate_Training_Regulations.pdf | Quy định toàn diện về hệ thống đào tạo đại học chính quy bao gồm chương trình khung, phương thức tổ chức dạy và học, quy định về tín chỉ, đăng ký học phần, điều kiện dự thi, hình thức kiểm tra đánh giá, quy đổi điểm, xếp loại học lực. Các quy định về chuyển ngành, chuyển trường, tạm ngừng học, thôi học, điều kiện công nhận tốt nghiệp và cấp bằng tốt nghiệp đại học. | NULL
+
+# ============================================================
 # OUTPUT
 # ============================================================
 [output]
-output_file: school/uni/insert_data.sql
+output_file: database-qldh/insert_data.sql
