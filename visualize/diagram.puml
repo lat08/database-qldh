@@ -97,17 +97,15 @@ class notification_schedule {
   is_deleted
   is_active
 }
-class payment_enrollment {
+class payment_enrollment_detail {
+  payment_enrollment_detail_ID
   payment_id
   enrollment_id
-  payment_date
-  notes
+  amount_paid
   created_at
-  updated_at
   created_by
-  updated_by
   is_deleted
-  is_active
+  CONSTRAINT
 }
 class payment_insurance {
   payment_id
@@ -178,7 +176,6 @@ class room_amenity_mapping {
 class room_booking {
   booking_id
   room_id
-  booking_type
   booking_date
   start_time
   end_time
@@ -280,19 +277,6 @@ class user_refresh_token {
 }
 
 ' Level 1 tables
-class admin {
-  admin_id
-  person_id
-  admin_code
-  position
-  admin_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-}
 class exam {
   exam_id
   course_id
@@ -301,7 +285,23 @@ class exam {
   exam_file_pdf
   answer_key_pdf
   notes
-  is_approved
+  exam_status
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+}
+class payment_enrollment {
+  payment_id
+  student_id
+  semester_id
+  payment_date
+  total_amount
+  transaction_reference
+  payment_status
+  notes
   created_at
   updated_at
   created_by
@@ -330,7 +330,6 @@ class student_enrollment {
   attendance_grade
   midterm_grade
   final_grade
-  is_paid
   created_at
   updated_at
   created_by
@@ -347,7 +346,6 @@ class student_health_insurance {
   start_date
   end_date
   insurance_status
-  is_paid
   created_at
   updated_at
   created_by
@@ -396,6 +394,19 @@ class user_account {
 }
 
 ' Level 2 tables
+class admin {
+  admin_id
+  person_id
+  admin_code
+  position
+  admin_status
+  created_at
+  updated_at
+  created_by
+  updated_by
+  is_deleted
+  is_active
+}
 class course_class {
   course_class_id
   course_id
@@ -470,6 +481,7 @@ class room {
   room_type
   building_id
   room_status
+  room_picture_path
   created_at
   updated_at
   created_by
@@ -596,13 +608,17 @@ course_class --> document
 instructor --> document
 user_account --> notification_schedule
 course --> exam
+admin --> exam
 exam --> exam_class
 course_class --> exam_class
 room --> exam_class
 instructor --> exam_class
 student --> student_health_insurance
 academic_year --> student_health_insurance
-student_enrollment --> payment_enrollment
+student --> payment_enrollment
+semester --> payment_enrollment
+payment_enrollment --> payment_enrollment_detail
+student_enrollment --> payment_enrollment_detail
 student_health_insurance --> payment_insurance
 room --> room_booking
 user_account --> room_booking
