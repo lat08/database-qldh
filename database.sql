@@ -651,7 +651,7 @@ CREATE TABLE exam_entry (
     CONSTRAINT FK_exam_entry_exam FOREIGN KEY (exam_id) 
         REFERENCES exam(exam_id) ON DELETE CASCADE,
     CONSTRAINT FK_exam_entry_course_class FOREIGN KEY (course_class_id) 
-        REFERENCES course_class(course_class_id) ON DELETE CASCADE,
+        REFERENCES course_class(course_class_id),
     CONSTRAINT FK_exam_entry_reviewed_by FOREIGN KEY (reviewed_by)
         REFERENCES admin(admin_id) ON DELETE SET NULL,
     
@@ -733,9 +733,9 @@ CREATE TABLE payment_enrollment (
     student_id UNIQUEIDENTIFIER NOT NULL,
     semester_id UNIQUEIDENTIFIER NOT NULL,
     payment_date DATETIME2 NOT NULL DEFAULT GETDATE(),
-    total_amount NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
     transaction_reference NVARCHAR(200), -- Bank transaction code or receipt number
-    payment_status NVARCHAR(20) DEFAULT 'completed' CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded')),
+    payment_status NVARCHAR(20) DEFAULT 'pending'
+         CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded')),
     notes NVARCHAR(500),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),

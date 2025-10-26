@@ -56,15 +56,16 @@ class MediaScanner:
         # Course documents
         course_docs_path = os.path.join(self.media_base_path, 'course_docs')
         if os.path.exists(course_docs_path):
-            for file in os.listdir(course_docs_path):
-                file_lower = file.lower()
-                if file_lower.endswith('.pdf'):
-                    self.files['course_docs']['pdf'].append(file)
-                elif file_lower.endswith(('.jpg', '.jpeg', '.png', '.gif')):
-                    self.files['course_docs']['images'].append(file)
-                elif file_lower.endswith(('.xls', '.xlsx', '.xlsm')):
-                    self.files['course_docs']['excel'].append(file)
-        
+            for root, dirs, files in os.walk(course_docs_path):  # Use os.walk for recursive
+                for file in files:
+                    file_lower = file.lower()
+                    if file_lower.endswith('.pdf'):
+                        self.files['course_docs']['pdf'].append(file)
+                    elif file_lower.endswith(('.jpg', '.jpeg', '.png', '.gif')):
+                        self.files['course_docs']['images'].append(file)
+                    elif file_lower.endswith(('.xls', '.xlsx', '.xlsm')):
+                        self.files['course_docs']['excel'].append(file)
+                
         # Room pictures
         room_pics_path = os.path.join(self.media_base_path, 'room_pics')
         if os.path.exists(room_pics_path):
@@ -743,17 +744,20 @@ class SQLDataGenerator:
                         ['curriculum_detail_id', 'department_id', 'subject_id', 'semester_id'],
                         curriculum_rows)
 
-    def create_exams_and_exam_classes(self):
+    def create_exams_and_exam_entries(self):
         """
-        NEW: Updated for two-table exam structure with PDF files
-        - exam: course-level exam definition (with exam PDFs and answer keys)
+        UPDATED: Generate exam definitions and exam entries
+        - exam: course-level exam definition (specifies how many exam codes needed)
+        - exam_entry: instructor-submitted exam PDFs (pending/approved/rejected, with codes)
         - exam_class: specific exam schedule for a course_class
         """
-        self.add_statement("\n-- ==================== EXAMS & EXAM CLASSES ====================")
-        self.add_statement("-- exam: course-level exam definition with PDF files")
+        self.add_statement("\n-- ==================== EXAMS, EXAM ENTRIES & EXAM CLASSES ====================")
+        self.add_statement("-- exam: course-level exam definition")
+        self.add_statement("-- exam_entry: instructor submissions (PDFs, approval workflow)")
         self.add_statement("-- exam_class: specific exam schedule with room and time")
         
         exam_rows = []
+        exam_entry_rows = []
         exam_class_rows = []
         
         # Track created exams by course_id to avoid duplicates
@@ -764,36 +768,141 @@ class SQLDataGenerator:
         for cc in self.data['course_classes']:
             course_classes_by_course[cc['course_id']].append(cc)
         
+        # Get admin for reviewing exam entries
+        admin_id = self.data['fixed_accounts']['admin']['admin_id']
+        
         for course_id, course_classes in course_classes_by_course.items():
             course = next((c for c in self.data['courses'] if c['course_id'] == course_id), None)
             if not course:
                 continue
             
-            # Create exam definition for this course (once per course)
+            # ============================================================
+            # 1. CREATE EXAM DEFINITION (once per course)
+            # ============================================================
             exam_id = self.generate_uuid()
             exam_format = random.choice(['multiple_choice', 'essay', 'practical', 'oral', 'mixed'])
             exam_type = random.choice(['midterm', 'final', 'final', 'final'])  # More finals
             
-            # Get random exam PDF and answer key
-            exam_pdf = self.media_scanner.get_random_file('course_docs', 'pdf')
-            answer_pdf = self.media_scanner.get_random_file('course_docs', 'pdf')
-            
-            exam_pdf_url = self.media_scanner.build_url('exams', exam_pdf) if exam_pdf else None
-            answer_pdf_url = self.media_scanner.build_url('exams', answer_pdf) if answer_pdf else None
+            # Determine how many exam codes needed (typically 2-4 variants)
+            num_exam_codes_needed = random.randint(2, 4)
             
             exam_rows.append([
                 exam_id,
                 course_id,
                 exam_format,
                 exam_type,
-                exam_pdf_url,
-                answer_pdf_url,
-                f"Đề thi {exam_type} - {course.get('subject_name', '')}"
+                f"Đề thi {exam_type} - {course.get('subject_name', '')}",
+                num_exam_codes_needed,
+                'published'  # Assume published for demo
             ])
             
             exams_by_course[course_id] = exam_id
             
-            # Create exam_class schedules for each course_class
+            # ============================================================
+            # 2. CREATE EXAM ENTRIES (instructor submissions)
+            # ============================================================
+            # Each course_class instructor submits their exam version
+            submitted_entries = []
+            
+            for cc in course_classes:
+                exam_entry_id = self.generate_uuid()
+                
+                # Display name (instructor's submission identifier)
+                instructor = next((i for i in self.data['instructors'] 
+                                if i['instructor_id'] == cc['instructor_id']), None)
+                instructor_name = instructor['full_name'] if instructor else 'GV'
+                display_name = f"{course['subject_code']} - {instructor_name} - Lớp {cc['session_number']}"
+                
+                # Get random exam PDF and answer key
+                question_pdf = self.media_scanner.get_random_file('course_docs', 'pdf')
+                answer_pdf = self.media_scanner.get_random_file('course_docs', 'pdf')
+
+                # if not question_pdf or not answer_pdf:
+                #     raise FileNotFoundError('fuck')
+                
+                question_file_path = self.media_scanner.build_url('exams', question_pdf)
+                answer_file_path = self.media_scanner.build_url('exams', answer_pdf)
+                
+                # Duration
+                duration_minutes = random.choice([90, 120, 150, 180])
+                
+                # Approval status (80% approved, 15% pending, 5% rejected)
+                status_rand = random.random()
+                if status_rand < 0.80:
+                    entry_status = 'approved'
+                    is_picked = False  # Will be set to True for selected entries later
+                    entry_code = None
+                    rejection_reason = None
+                    reviewed_by = admin_id
+                    reviewed_at = datetime.now() - timedelta(days=random.randint(5, 30))
+                elif status_rand < 0.95:
+                    entry_status = 'pending'
+                    is_picked = False
+                    entry_code = None
+                    rejection_reason = None
+                    reviewed_by = None
+                    reviewed_at = None
+                else:
+                    entry_status = 'rejected'
+                    is_picked = False
+                    entry_code = None
+                    rejection_reason = random.choice([
+                        'Đề thi không đúng format',
+                        'Thiếu đáp án',
+                        'Độ khó chưa phù hợp',
+                        'Cần bổ sung câu hỏi'
+                    ])
+                    reviewed_by = admin_id
+                    reviewed_at = datetime.now() - timedelta(days=random.randint(1, 15))
+                
+                exam_entry_rows.append([
+                    exam_entry_id,
+                    exam_id,
+                    cc['course_class_id'],
+                    entry_code,  # Will be updated for picked entries
+                    display_name,
+                    question_file_path,
+                    answer_file_path,
+                    duration_minutes,
+                    is_picked,
+                    entry_status,
+                    rejection_reason,
+                    reviewed_by,
+                    reviewed_at
+                ])
+                
+                if entry_status == 'approved':
+                    submitted_entries.append({
+                        'exam_entry_id': exam_entry_id,
+                        'course_class_id': cc['course_class_id'],
+                        'duration_minutes': duration_minutes
+                    })
+            
+            # ============================================================
+            # 3. PICK EXAM ENTRIES (assign entry codes A, B, C, etc.)
+            # ============================================================
+            # Randomly select entries up to num_exam_codes_needed
+            if submitted_entries:
+                num_to_pick = min(num_exam_codes_needed, len(submitted_entries))
+                picked_entries = random.sample(submitted_entries, num_to_pick)
+                
+                entry_codes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+                
+                for idx, entry in enumerate(picked_entries):
+                    entry_code = entry_codes[idx] if idx < len(entry_codes) else f"E{idx+1}"
+                    
+                    # UPDATE the exam_entry row to mark it as picked with entry_code
+                    # Find the row in exam_entry_rows
+                    for i, row in enumerate(exam_entry_rows):
+                        if row[0] == entry['exam_entry_id']:  # exam_entry_id match
+                            # Update entry_code (index 3) and is_picked (index 8)
+                            exam_entry_rows[i][3] = entry_code
+                            exam_entry_rows[i][8] = True  # is_picked
+                            break
+            
+            # ============================================================
+            # 4. CREATE EXAM_CLASS SCHEDULES
+            # ============================================================
             semester = next((s for s in self.data['semesters'] 
                             if s['semester_id'] == course['semester_id']), None)
             
@@ -879,13 +988,22 @@ class SQLDataGenerator:
                     ])
         
         self.add_statement(f"-- Total exams (course-level): {len(exam_rows)}")
+        self.add_statement(f"-- Total exam entries (instructor submissions): {len(exam_entry_rows)}")
         self.add_statement(f"-- Total exam_class (scheduled): {len(exam_class_rows)}")
         
         # Insert exam definitions
         self.bulk_insert('exam',
                         ['exam_id', 'course_id', 'exam_format', 'exam_type', 
-                        'exam_file_pdf', 'answer_key_pdf', 'notes'],
+                        'notes', 'num_exam_codes_needed', 'exam_status'],
                         exam_rows)
+        
+        # Insert exam entries
+        self.bulk_insert('exam_entry',
+                        ['exam_entry_id', 'exam_id', 'course_class_id', 'entry_code',
+                        'display_name', 'question_file_path', 'answer_file_path',
+                        'duration_minutes', 'is_picked', 'entry_status', 'rejection_reason',
+                        'reviewed_by', 'reviewed_at'],
+                        exam_entry_rows)
         
         # Insert exam_class schedules
         self.bulk_insert('exam_class',
@@ -1227,6 +1345,10 @@ class SQLDataGenerator:
             
             # Get random profile picture for fixed student
             profile_pic = self.media_scanner.get_random_file('profile_pics')
+
+            if not profile_pic:
+                raise FileNotFoundError('fuck')
+
             profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
             
             person_rows.append([person_id, self.test_config.get('student_name'),
@@ -1464,41 +1586,41 @@ class SQLDataGenerator:
         # Define standard amenities
         amenities = [
             # Basic equipment
-            'Máy chiếu (Projector)',
-            'Bảng trắng (Whiteboard)',
-            'Bảng đen (Blackboard)',
-            'Màn hình chiếu (Projection screen)',
-            'Loa âm thanh (Audio speakers)',
-            'Micro (Microphone)',
+            'Máy chiếu',
+            'Bảng trắng',
+            'Bảng đen',
+            'Màn hình chiếu',
+            'Loa âm thanh',
+            'Micro',
             
             # Technology
-            'Máy tính giảng viên (Instructor PC)',
-            'Kết nối Internet (Internet connection)',
+            'Máy tính giảng viên',
+            'Kết nối Internet',
             'WiFi',
-            'Hệ thống âm thanh (Sound system)',
-            'Camera giám sát (Security camera)',
-            'Màn hình tương tác (Interactive display)',
+            'Hệ thống âm thanh',
+            'Camera giám sát',
+            'Màn hình tương tác',
             
             # Comfort
-            'Điều hòa không khí (Air conditioning)',
-            'Quạt trần (Ceiling fans)',
-            'Cửa sổ lớn (Large windows)',
-            'Rèm che (Curtains/Blinds)',
-            'Ghế có đệm (Cushioned chairs)',
-            'Bàn học điều chỉnh (Adjustable desks)',
+            'Điều hòa không khí',
+            'Quạt trần',
+            'Cửa sổ lớn',
+            'Rèm che',
+            'Ghế có đệm',
+            'Bàn học điều chỉnh',
             
             # Specialized equipment
-            'Thiết bị thí nghiệm (Lab equipment)',
-            'Tủ hóa chất (Chemical storage)',
-            'Máy tính cá nhân (PC stations)',
-            'Bàn vẽ (Drawing tables)',
-            'Nhạc cụ (Musical instruments)',
-            'Thiết bị thể dục (Gym equipment)',
-            'Tủ đồ cá nhân (Personal lockers)',
-            'Giường nằm (Beds)',
-            'Tủ quần áo (Wardrobes)',
-            'Kệ sách (Bookshelves)',
-            'Đèn đọc sách (Reading lights)'
+            'Thiết bị thí nghiệm',
+            'Tủ hóa chất',
+            'Máy tính cá nhân',
+            'Bàn vẽ',
+            'Nhạc cụ',
+            'Thiết bị thể dục',
+            'Tủ đồ cá nhân',
+            'Giường nằm',
+            'Tủ quần áo',
+            'Kệ sách',
+            'Đèn đọc sách'
         ]
         
         for amenity_name in amenities:
@@ -2229,14 +2351,16 @@ class SQLDataGenerator:
 
     def create_payments(self):
         """
-        UPDATED: Generate payments using NEW schema structure
-        - payment_enrollment: for course tuition (with payment_enrollment_detail)
+        UPDATED: Generate payments using NEW schema structure WITHOUT total_amount
+        - payment_enrollment: for course tuition (total calculated from details)
+        - payment_enrollment_detail: individual course payments
         - payment_insurance: for health insurance
         """
         self.add_statement("\n-- ==================== PAYMENTS ====================")
         self.add_statement("-- Creating payments in TWO separate tables:")
         self.add_statement("-- 1. payment_enrollment + payment_enrollment_detail (course tuition)")
         self.add_statement("-- 2. payment_insurance (health insurance)")
+        self.add_statement("-- NOTE: total_amount calculated from payment_enrollment_detail")
         
         enrollment_payment_rows = []
         enrollment_detail_rows = []
@@ -2264,16 +2388,6 @@ class SQLDataGenerator:
         for (student_id, semester_id), enrollments in enrollments_by_student_semester.items():
             payment_id = self.generate_uuid()
             
-            # Calculate total amount for all courses in this semester
-            total_amount = 0
-            for enr in enrollments:
-                course = next((c for c in self.data['courses'] 
-                            if c['course_id'] == enr['course_id']), None)
-                if course:
-                    credits = course.get('credits', 0)
-                    fee_per_credit = course.get('fee_per_credit', 600000)
-                    total_amount += credits * fee_per_credit
-            
             # Payment date: shortly after first enrollment date
             first_enrollment_date = min(e['enrollment_date'] for e in enrollments)
             payment_date = first_enrollment_date + timedelta(days=random.randint(1, 15))
@@ -2281,13 +2395,12 @@ class SQLDataGenerator:
             # Transaction reference (bank transfer code, etc.)
             transaction_ref = f"TXN{random.randint(100000000, 999999999)}"
             
-            # Insert payment_enrollment
+            # Insert payment_enrollment (WITHOUT total_amount)
             enrollment_payment_rows.append([
                 payment_id,
                 student_id,
                 semester_id,
                 payment_date,
-                total_amount,
                 transaction_ref,
                 'completed',
                 f'Thanh toán học phí học kỳ'
@@ -2321,7 +2434,7 @@ class SQLDataGenerator:
         self.add_statement("\n-- Generating health insurance payments...")
         
         for insurance in self.data.get('insurances', []):
-            if insurance.get('should_have_payment', False):  # Changed from is_paid
+            if insurance.get('should_have_payment', False):
                 payment_id = self.generate_uuid()
                 
                 # Payment date: before start date
@@ -2340,10 +2453,10 @@ class SQLDataGenerator:
         # INSERT INTO DATABASE
         # =========================================================================
         
-        # Insert payment_enrollment (NO payment_method column!)
+        # Insert payment_enrollment (WITHOUT total_amount column)
         self.bulk_insert('payment_enrollment',
                         ['payment_id', 'student_id', 'semester_id', 'payment_date', 
-                        'total_amount', 'transaction_reference', 'payment_status', 'notes'],
+                        'transaction_reference', 'payment_status', 'notes'],
                         enrollment_payment_rows)
         
         # Insert payment_enrollment_detail
@@ -2356,7 +2469,6 @@ class SQLDataGenerator:
         self.bulk_insert('payment_insurance',
                         ['payment_id', 'insurance_id', 'payment_date', 'notes'],
                         insurance_payment_rows)
-
 
     def create_exam_schedules(self):
         self.add_statement("\n-- ==================== EXAMS ====================")
@@ -2816,7 +2928,7 @@ class SQLDataGenerator:
         self.create_documents() 
         
         # Exams and assessments
-        self.create_exams_and_exam_classes()  # NEW/UPDATED
+        self.create_exams_and_exam_entries()  # NEW/UPDATED
         
         # Additional features
         self.create_student_health_insurance()  # NEW
