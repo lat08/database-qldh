@@ -7,8 +7,8 @@ UPDATED: Removed room_booking, exam_schedule now references room directly
 """
 
 # ==================== CONFIGURATION ====================
-SPEC_FILE = r'database-qldh\specs.txt' 
-OUTPUT_FILE = r'database-qldh\insert_data.sql'
+SPEC_FILE = r'specs.txt' 
+OUTPUT_FILE = r'insert_data.sql'
 # ========================================================
 
 import uuid

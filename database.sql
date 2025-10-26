@@ -934,3 +934,10 @@ CREATE INDEX idx_theme_history_config ON theme_history(theme_config_id);
 CREATE INDEX idx_theme_history_admin ON theme_history(changed_by_admin_id);
 CREATE INDEX idx_theme_history_action ON theme_history(action);
 CREATE INDEX idx_theme_history_created ON theme_history(created_at);
+
+CREATE TABLE payment_group (
+    id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    student_course_ids NVARCHAR(MAX) NOT NULL,
+    created_at DATETIME NOT NULL,
+    status NVARCHAR(255) NOT NULL
+);
