@@ -118,22 +118,24 @@ CREATE TABLE room (
     capacity INT NOT NULL CHECK (capacity > 0),
     room_type NVARCHAR(30) NOT NULL 
         CHECK (room_type IN (
-			'exam',
-            'lecture_hall',      -- giảng đường
-            'classroom',         -- phòng học
-            'computer_lab',      -- phòng máy tính
-            'laboratory',        -- phòng thí nghiệm
-            'meeting_room',      -- phòng họp
-            'gym_room',          -- phòng thể dục
-            'swimming_pool',     -- hồ bơi
-            'music_room',        -- phòng âm nhạc
-            'art_room',          -- phòng mỹ thuật
-            'library_room',      -- phòng thư viện
-            'self_study_room',   -- phòng tự học
-            'dorm_room'          -- ký túc xá / phòng ở
+            'exam',
+            'lecture_hall',      
+            'classroom',         
+            'computer_lab',      
+            'laboratory',        
+            'meeting_room',      
+            'gym_room',          
+            'swimming_pool',     
+            'music_room',        
+            'art_room',          
+            'library_room',      
+            'self_study_room',   
+            'dorm_room'          
         )),
     building_id UNIQUEIDENTIFIER NOT NULL,
     room_status NVARCHAR(20) DEFAULT 'active' CHECK (room_status IN ('active', 'inactive', 'maintenance')),
+
+    room_picture_path NVARCHAR(500) NULL,  -- <--- new column for picture path
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
