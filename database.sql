@@ -604,10 +604,9 @@ CREATE TABLE exam (
     course_id UNIQUEIDENTIFIER NOT NULL,
     exam_format NVARCHAR(50) NOT NULL CHECK (exam_format IN ('multiple_choice', 'essay', 'practical', 'oral', 'mixed')),
     exam_type NVARCHAR(20) DEFAULT 'final' CHECK (exam_type IN ('midterm', 'final', 'makeup', 'quiz')),
-    exam_file_pdf NVARCHAR(1000),
-    answer_key_pdf NVARCHAR(1000),
     notes NVARCHAR(500),
-    exam_status NVARCHAR(20) DEFAULT 'pending' CHECK (exam_status IN ('pending', 'approved', 'rejected')), 
+    num_exam_codes_needed INT NOT NULL CHECK (num_exam_codes_needed > 0),
+    exam_status NVARCHAR(20) DEFAULT 'draft' CHECK (exam_status IN ('draft', 'ready', 'published', 'cancelled')), 
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -617,9 +616,56 @@ CREATE TABLE exam (
     is_active BIT NOT NULL DEFAULT 1,
 
     CONSTRAINT FK_exam_course FOREIGN KEY (course_id) 
-        REFERENCES course(course_id) ON DELETE CASCADE,
-    CONSTRAINT FK_exam_created_by FOREIGN KEY (created_by) 
-        REFERENCES admin(admin_id) ON DELETE NO ACTION
+        REFERENCES course(course_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- EXAM ENTRY (Individual exam submissions from instructors)
+-- ============================================================
+CREATE TABLE exam_entry (
+    exam_entry_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    exam_id UNIQUEIDENTIFIER NOT NULL,
+    course_class_id UNIQUEIDENTIFIER NOT NULL,
+    
+    entry_code NVARCHAR(10) NULL, -- Assigned when picked (A, B, C, etc.)
+    display_name NVARCHAR(200) NOT NULL,
+    question_file_path NVARCHAR(1000) NOT NULL,
+    answer_file_path NVARCHAR(1000) NOT NULL,
+    duration_minutes INT NOT NULL CHECK (duration_minutes > 0),
+    
+    is_picked BIT NOT NULL DEFAULT 0,
+    entry_status NVARCHAR(20) NOT NULL DEFAULT 'pending' 
+        CHECK (entry_status IN ('pending', 'approved', 'rejected')),
+    
+    rejection_reason NVARCHAR(500) NULL,
+    reviewed_by UNIQUEIDENTIFIER NULL,
+    reviewed_at DATETIME2 NULL,
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+    
+    CONSTRAINT FK_exam_entry_exam FOREIGN KEY (exam_id) 
+        REFERENCES exam(exam_id) ON DELETE CASCADE,
+    CONSTRAINT FK_exam_entry_course_class FOREIGN KEY (course_class_id) 
+        REFERENCES course_class(course_class_id) ON DELETE CASCADE,
+    CONSTRAINT FK_exam_entry_reviewed_by FOREIGN KEY (reviewed_by)
+        REFERENCES admin(admin_id) ON DELETE SET NULL,
+    
+    -- Only picked entries can have entry_code
+    CONSTRAINT CHK_entry_code_when_picked CHECK (
+        (is_picked = 0 AND entry_code IS NULL) OR 
+        (is_picked = 1 AND entry_code IS NOT NULL)
+    ),
+    
+    -- Can only be picked if approved
+    CONSTRAINT CHK_picked_must_be_approved CHECK (
+        (is_picked = 0) OR 
+        (is_picked = 1 AND entry_status = 'approved')
+    )
 );
 
 -- ============================================================

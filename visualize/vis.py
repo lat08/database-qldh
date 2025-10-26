@@ -4,8 +4,8 @@ from collections import defaultdict
 # ============================================================
 # FILE PATHS - CONFIGURE THESE
 # ============================================================
-INPUT_SQL_FILE = r'database.sql'
-OUTPUT_PLANTUML_FILE = r'visualize\diagram.puml'
+INPUT_SQL_FILE = r'database-qldh\database.sql'
+OUTPUT_PLANTUML_FILE = r'database-qldh\visualize\diagram.puml'
 
 # ============================================================
 # PARSER

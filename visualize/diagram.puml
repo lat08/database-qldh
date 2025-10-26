@@ -107,6 +107,12 @@ class payment_enrollment_detail {
   is_deleted
   CONSTRAINT
 }
+class payment_group {
+  id
+  student_course_ids
+  created_at
+  status
+}
 class payment_insurance {
   payment_id
   insurance_id

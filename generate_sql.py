@@ -7,8 +7,8 @@ UPDATED: Removed room_booking, exam_schedule now references room directly
 """
 
 # ==================== CONFIGURATION ====================
-SPEC_FILE = r'specs.txt' 
-OUTPUT_FILE = r'insert_data.sql'
+SPEC_FILE = r'database-qldh/specs.txt' 
+OUTPUT_FILE = r'database-qldh/insert_data.sql'
 # ========================================================
 
 import uuid
@@ -1983,10 +1983,10 @@ class SQLDataGenerator:
                     continue
                 
                 # Don't enroll in future semesters (after Fall 2025)
-                if course['start_year'] > 2025:
-                    continue
-                if course['start_year'] == 2025 and course['semester_type'] == 'summer':
-                    continue  # Skip summer 2025 (future)
+                # if course['start_year'] > 2025:
+                #     continue
+                # if course['start_year'] == 2025 and course['semester_type'] == 'summer':
+                #     continue  # Skip summer 2025 (future)
                 
                 student_courses.append(course)
             
