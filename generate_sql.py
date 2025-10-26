@@ -2037,6 +2037,7 @@ class SQLDataGenerator:
         """
         UPDATED: Store insurance IDs for payment generation
         Now tracks insurance records that will be paid via payment_insurance table
+        REMOVED: is_paid column (no longer in schema)
         """
         self.add_statement("\n-- ==================== STUDENT HEALTH INSURANCE ====================")
         
@@ -2076,7 +2077,8 @@ class SQLDataGenerator:
                         start_date = dates['start_date']
                         end_date = dates['end_date']
                     
-                    is_paid = 1 if ay['start_year'] <= 2024 else 0  # Only past years are paid
+                    # Determine if this insurance should have a payment record
+                    should_have_payment = (ay['start_year'] <= 2024)  # Only past years are paid
                     status = 'active' if ay['end_year'] >= 2025 else 'expired'
                     
                     insurance_rows.append([
@@ -2086,8 +2088,7 @@ class SQLDataGenerator:
                         insurance_fee,
                         start_date,
                         end_date,
-                        status,
-                        is_paid
+                        status
                     ])
                     
                     # STORE insurance data for payment generation
@@ -2097,14 +2098,15 @@ class SQLDataGenerator:
                         'academic_year_id': ay['academic_year_id'],
                         'fee': insurance_fee,
                         'start_date': start_date,
-                        'is_paid': is_paid
+                        'should_have_payment': should_have_payment  # Changed from is_paid
                     })
         
         self.add_statement(f"-- Total health insurance records: {len(insurance_rows)}")
         
+        # REMOVED is_paid from column list
         self.bulk_insert('student_health_insurance',
                         ['insurance_id', 'student_id', 'academic_year_id', 'insurance_fee',
-                        'start_date', 'end_date', 'insurance_status', 'is_paid'],
+                        'start_date', 'end_date', 'insurance_status'],
                         insurance_rows)
 
     def create_payments(self):
@@ -2201,7 +2203,7 @@ class SQLDataGenerator:
         self.add_statement("\n-- Generating health insurance payments...")
         
         for insurance in self.data.get('insurances', []):
-            if insurance['is_paid'] == 1:  # Only create payment if marked as paid
+            if insurance.get('should_have_payment', False):  # Changed from is_paid
                 payment_id = self.generate_uuid()
                 
                 # Payment date: before start date
@@ -2236,6 +2238,7 @@ class SQLDataGenerator:
         self.bulk_insert('payment_insurance',
                         ['payment_id', 'insurance_id', 'payment_date', 'notes'],
                         insurance_payment_rows)
+
 
     def create_exam_schedules(self):
         self.add_statement("\n-- ==================== EXAMS ====================")

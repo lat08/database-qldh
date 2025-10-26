@@ -663,7 +663,6 @@ CREATE TABLE student_health_insurance (
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     insurance_status NVARCHAR(20) DEFAULT 'active' CHECK (insurance_status IN ('active', 'expired', 'cancelled')),
-    is_paid BIT NOT NULL DEFAULT 0,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
