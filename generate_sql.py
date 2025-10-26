@@ -407,12 +407,12 @@ class SQLDataGenerator:
         
         self.add_statement(f"-- ADMIN IDs: person={person_id}, user={user_id}, admin={admin_id}")
         
-        # Insert all fixed accounts
-        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture_url'], person_rows)
+        # Insert all fixed accounts - FIXED: profile_picture instead of profile_picture_url
+        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture'], person_rows)
         self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
         self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
         self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
-        
+
     def create_regular_staff(self):
         self.add_statement("\n-- ==================== REGULAR INSTRUCTORS & ADMINS ====================")
         
@@ -483,84 +483,12 @@ class SQLDataGenerator:
             
             self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
         
-        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture_url'], person_rows)
+        # FIXED: profile_picture instead of profile_picture_url
+        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture'], person_rows)
         self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
         self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
-        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
-        
-        self.add_statement("\n-- ==================== REGULAR INSTRUCTORS & ADMINS ====================")
-        
-        first_names = self.names_config.get('first_names', '').split(', ')
-        middle_names = self.names_config.get('middle_names', '').split(', ')
-        last_names_male = self.names_config.get('last_names_male', '').split(', ')
-        last_names_female = self.names_config.get('last_names_female', '').split(', ')
-        
-        person_rows = []
-        user_rows = []
-        instructor_rows = []
-        admin_rows = []
-        
-        # Instructors
-        num_instructors = int(self.staff_config.get('regular_instructors', 12))
-        for i in range(num_instructors):
-            gender = random.choice(['male', 'female'])
-            last_pool = last_names_male if gender == 'male' else last_names_female
-            
-            person_id = self.generate_uuid()
-            full_name = f"{random.choice(first_names)} {random.choice(middle_names)} {random.choice(last_pool)}"
-            email = f"gv{i+1:02d}@edu.vn"
-            phone = f"0{random.randint(300000000, 999999999)}"
-            dob = date(random.randint(1970, 1990), random.randint(1, 12), random.randint(1, 28))
-            
-            citizen_id = f"{random.randint(100000000000, 999999999999)}"
-            
-            person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 'TP Hồ Chí Minh'])
-            
-            user_id = self.generate_uuid()
-            username = f"gv{i+1:02d}"
-            # FIXED: Changed 'status' to 'account_status'
-            user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Instructor', 'active'])
-            
-            instructor_id = self.generate_uuid()
-            degree = random.choice(['Tiến sĩ', 'Thạc sĩ', 'Cử nhân'])
-            specialization = random.choice(['Công nghệ thông tin', 'Kinh tế', 'Kỹ thuật', 'Khoa học'])
-            hire_date = date(random.randint(2010, 2020), random.randint(1, 12), 1)
-            # FIXED: Changed 'status' to 'employment_status', added specialization and department_id
-            instructor_rows.append([instructor_id, person_id, f"GV{i+1:04d}", degree, specialization, None, hire_date, 'active'])
-            
-            self.data['instructors'].append({'instructor_id': instructor_id, 'person_id': person_id, 'full_name': full_name})
-        
-        # Admins
-        num_admins = int(self.staff_config.get('regular_admins', 2))
-        for i in range(num_admins):
-            person_id = self.generate_uuid()
-            full_name = f"{random.choice(first_names)} {random.choice(middle_names)} {random.choice(last_names_male)}"
-            email = f"admin{i+1}@edu.vn"
-            phone = f"0{random.randint(300000000, 999999999)}"
-            
-            citizen_id = f"{random.randint(100000000000, 999999999999)}"
-            
-            person_rows.append([person_id, full_name, date(1975, 1, 1), 'male', email, phone, citizen_id, 'TP Hồ Chí Minh'])
-            
-            user_id = self.generate_uuid()
-            username = f"admin{i+1}"
-            # FIXED: Changed 'status' to 'account_status'
-            user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Admin', 'active'])
-            
-            admin_id = self.generate_uuid()
-            # FIXED: Changed 'status' to 'admin_status'
-            admin_rows.append([admin_id, person_id, f"AD{i+1:04d}", 'Quản trị viên', 'active'])
-            
-            self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
-        
-        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address'], person_rows)
-        # FIXED: Changed 'status' to 'account_status'
-        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
-        # FIXED: Changed 'status' to 'employment_status', added specialization and department_id
-        self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
-        # FIXED: Changed 'status' to 'admin_status'
-        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
-
+        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)    
+    
     def create_faculties_and_departments(self):
         self.add_statement("\n-- ==================== FACULTIES & DEPARTMENTS ====================")
         
@@ -817,12 +745,12 @@ class SQLDataGenerator:
 
     def create_exams_and_exam_classes(self):
         """
-        NEW: Updated for two-table exam structure
-        - exam: course-level exam definition
+        NEW: Updated for two-table exam structure with PDF files
+        - exam: course-level exam definition (with exam PDFs and answer keys)
         - exam_class: specific exam schedule for a course_class
         """
         self.add_statement("\n-- ==================== EXAMS & EXAM CLASSES ====================")
-        self.add_statement("-- exam: course-level exam definition")
+        self.add_statement("-- exam: course-level exam definition with PDF files")
         self.add_statement("-- exam_class: specific exam schedule with room and time")
         
         exam_rows = []
@@ -846,13 +774,20 @@ class SQLDataGenerator:
             exam_format = random.choice(['multiple_choice', 'essay', 'practical', 'oral', 'mixed'])
             exam_type = random.choice(['midterm', 'final', 'final', 'final'])  # More finals
             
+            # Get random exam PDF and answer key
+            exam_pdf = self.media_scanner.get_random_file('course_docs', 'pdf')
+            answer_pdf = self.media_scanner.get_random_file('course_docs', 'pdf')
+            
+            exam_pdf_url = self.media_scanner.build_url('exams', exam_pdf) if exam_pdf else None
+            answer_pdf_url = self.media_scanner.build_url('exams', answer_pdf) if answer_pdf else None
+            
             exam_rows.append([
                 exam_id,
                 course_id,
                 exam_format,
                 exam_type,
-                None,  # exam_file_pdf
-                None,  # answer_key_pdf
+                exam_pdf_url,
+                answer_pdf_url,
                 f"Đề thi {exam_type} - {course.get('subject_name', '')}"
             ])
             
@@ -957,7 +892,7 @@ class SQLDataGenerator:
                         ['exam_class_id', 'exam_id', 'course_class_id', 'room_id',
                         'monitor_instructor_id', 'start_time', 'duration_minutes', 'exam_status'],
                         exam_class_rows)
-    
+
     def create_student_enrollments(self):
         """
         UPDATED: Track enrollment IDs and course info for payment generation
@@ -1290,13 +1225,18 @@ class SQLDataGenerator:
             
             fixed_student_citizen_id = f"{random.randint(100000000000, 999999999999)}"
             
+            # Get random profile picture for fixed student
+            profile_pic = self.media_scanner.get_random_file('profile_pics')
+            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+            
             person_rows.append([person_id, self.test_config.get('student_name'),
                             self.test_config.get('student_dob'),
                             self.test_config.get('student_gender'),
                             self.test_config.get('student_email'),
                             self.test_config.get('student_phone'),
                             fixed_student_citizen_id,
-                            'TP Hồ Chí Minh'])
+                            'TP Hồ Chí Minh',
+                            profile_pic_url])
             
             user_rows.append([user_id, person_id, self.test_config.get('student_username'),
                             password_hash, salt_b64, 'Student', 'active'])
@@ -1316,7 +1256,7 @@ class SQLDataGenerator:
             self.add_statement(f"-- Fixed STUDENT: {self.test_config.get('student_username')}")
             self.add_statement(f"-- STUDENT IDs: person={person_id}, user={user_id}, student={student_id}")
         
-        # Regular students (rest of the function remains the same...)
+        # Regular students
         for cls in self.data['classes']:
             for i in range(students_per_class):
                 gender = random.choice(['male', 'female'])
@@ -1331,7 +1271,11 @@ class SQLDataGenerator:
                 
                 citizen_id = f"{random.randint(100000000000, 999999999999)}"
                 
-                person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 'TP Hồ Chí Minh'])
+                # Get random profile picture for regular student
+                profile_pic = self.media_scanner.get_random_file('profile_pics')
+                profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+                
+                person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 'TP Hồ Chí Minh', profile_pic_url])
                 
                 user_id = self.generate_uuid()
                 username = f"sv{global_counter:05d}"
@@ -1352,7 +1296,8 @@ class SQLDataGenerator:
                 
                 global_counter += 1
         
-        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address'], person_rows)
+        # FIXED: profile_picture instead of profile_picture_url
+        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture'], person_rows)
         self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
         self.bulk_insert('student', ['student_id', 'person_id', 'student_code', 'class_id', 'enrollment_status'], student_rows)
 
@@ -1462,12 +1407,18 @@ class SQLDataGenerator:
                 
                 room_name = f"{room_name_map.get(selected_type, 'Phòng')} {room_code}"
                 
+                # Get random room picture
+                room_pic = self.media_scanner.get_random_file('room_pics')
+                room_pic_url = self.media_scanner.build_url('room_pics', room_pic) if room_pic else None
+                
+                # FIXED: Changed 'picture_url' to 'room_picture_path'
                 self.data['rooms'].append({
                     'room_id': room_id, 
                     'room_code': room_code, 
                     'room_name': room_name,
                     'capacity': capacity,
-                    'room_type': selected_type
+                    'room_type': selected_type,
+                    'room_picture_path': room_pic_url
                 })
                 
                 room_rows.append([
@@ -1475,9 +1426,10 @@ class SQLDataGenerator:
                     room_code, 
                     room_name, 
                     capacity, 
-                    selected_type,  # room_type
+                    selected_type,
                     building_id, 
-                    'active'
+                    'active',
+                    room_pic_url
                 ])
         
         self.add_statement(f"-- Total buildings: {len(building_rows)}")
@@ -1498,9 +1450,8 @@ class SQLDataGenerator:
                         building_rows)
         
         self.bulk_insert('room', 
-                        ['room_id', 'room_code', 'room_name', 'capacity', 'room_type', 'building_id', 'room_status'], 
+                        ['room_id', 'room_code', 'room_name', 'capacity', 'room_type', 'building_id', 'room_status', 'room_picture_path'], 
                         room_rows)
-
 
     def create_room_amenities(self):
         """
