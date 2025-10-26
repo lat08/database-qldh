@@ -648,7 +648,6 @@ class SQLDataGenerator:
                         ['curriculum_detail_id', 'department_id', 'subject_id', 'semester_id'],
                         curriculum_rows)
 
-
     def create_exams_and_exam_classes(self):
         """
         NEW: Updated for two-table exam structure
@@ -687,8 +686,7 @@ class SQLDataGenerator:
                 exam_type,
                 None,  # exam_file_pdf
                 None,  # answer_key_pdf
-                f"Đề thi {exam_type} - {course.get('subject_name', '')}",
-                1  # is_approved
+                f"Đề thi {exam_type} - {course.get('subject_name', '')}"
             ])
             
             exams_by_course[course_id] = exam_id
@@ -784,7 +782,7 @@ class SQLDataGenerator:
         # Insert exam definitions
         self.bulk_insert('exam',
                         ['exam_id', 'course_id', 'exam_format', 'exam_type', 
-                        'exam_file_pdf', 'answer_key_pdf', 'notes', 'is_approved'],
+                        'exam_file_pdf', 'answer_key_pdf', 'notes'],
                         exam_rows)
         
         # Insert exam_class schedules
@@ -792,140 +790,242 @@ class SQLDataGenerator:
                         ['exam_class_id', 'exam_id', 'course_class_id', 'room_id',
                         'monitor_instructor_id', 'start_time', 'duration_minutes', 'exam_status'],
                         exam_class_rows)
-
-    def create_student_health_insurance(self):
+    
+    def create_student_enrollments(self):
         """
-        UPDATED: Store insurance IDs for payment generation
+        UPDATED: Track enrollment IDs and course info for payment generation
+        Fixed: Added deduplication to prevent UNIQUE constraint violations
         """
-        self.add_statement("\n-- ==================== STUDENT HEALTH INSURANCE ====================")
+        self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (REALISTIC & MASSIVE) ====================")
+        self.add_statement("-- Students enrolled with STRICT schedule conflict checking")
+        self.add_statement("-- Fixed STUDENT account gets deterministic grades for testing")
         
-        insurance_rows = []
-        insurance_fee = 500000  # 500,000 VND per year
+        enrollment_rows = []
         
-        # IMPORTANT: Initialize insurances list
-        self.data['insurances'] = []
+        # IMPORTANT: Initialize enrollments list to track IDs and course info
+        self.data['enrollments'] = []
         
-        # Build academic year date lookup from semesters
-        ay_dates = {}
-        for semester in self.data['semesters']:
-            ay_id = semester['academic_year_id']
-            if ay_id not in ay_dates:
-                ay_dates[ay_id] = {
-                    'start_date': semester['start_date'],
-                    'end_date': semester['end_date']
-                }
-            else:
-                if semester['start_date'] < ay_dates[ay_id]['start_date']:
-                    ay_dates[ay_id]['start_date'] = semester['start_date']
-                if semester['end_date'] > ay_dates[ay_id]['end_date']:
-                    ay_dates[ay_id]['end_date'] = semester['end_date']
+        # Track enrollments to prevent duplicates: (student_id, course_class_id) -> True
+        enrolled_combinations = set()
+        
+        # Group course_classes by course_id
+        course_classes_by_course = defaultdict(list)
+        for cc in self.data['course_classes']:
+            course_classes_by_course[cc['course_id']].append(cc)
+        
+        att_min = float(self.enrollment_config.get('attendance_min', 7.0))
+        att_max = float(self.enrollment_config.get('attendance_max', 10.0))
+        mid_min = float(self.enrollment_config.get('midterm_min', 5.0))
+        mid_max = float(self.enrollment_config.get('midterm_max', 9.5))
+        fin_min = float(self.enrollment_config.get('final_min', 5.0))
+        fin_max = float(self.enrollment_config.get('final_max', 9.5))
+        
+        # Track each student's schedule: student_id -> {semester_id: [(day, start_period, end_period), ...]}
+        student_schedules = defaultdict(lambda: defaultdict(list))
+        
+        conflict_count = 0
+        skipped_count = 0
+        duplicate_count = 0
         
         for student in self.data['students']:
+            class_id = student['class_id']
+            cls = next((c for c in self.data['classes'] if c['class_id'] == class_id), None)
+            if not cls or 'curriculum' not in cls:
+                continue
+            
+            curriculum_subject_ids = {s['subject_id'] for s in cls['curriculum']}
+            is_fixed = student.get('is_fixed', False)
             student_start_year = student['class_start_year']
             
-            for ay in self.data['academic_years']:
-                if ay['start_year'] >= student_start_year and ay['start_year'] <= 2025:
-                    insurance_id = self.generate_uuid()
+            # Get all courses this student should take
+            student_courses = []
+            for course in self.data['courses']:
+                if course['subject_id'] not in curriculum_subject_ids:
+                    continue
+                
+                # Only enroll in courses at or after student's start year
+                if course['start_year'] < student_start_year:
+                    continue
+                
+                # Don't enroll in future semesters (after Fall 2025)
+                if course['start_year'] > 2025:
+                    continue
+                if course['start_year'] == 2025 and course['semester_type'] == 'summer':
+                    continue  # Skip summer 2025 (future)
+                
+                student_courses.append(course)
+            
+            # Sort courses by semester for proper scheduling
+            semester_order = {'fall': 1, 'spring': 2, 'summer': 3}
+            student_courses.sort(key=lambda c: (c['start_year'], semester_order.get(c['semester_type'], 0)))
+            
+            for course in student_courses:
+                # Find available course_class sections for this course
+                available_classes = course_classes_by_course.get(course['course_id'], [])
+                if not available_classes:
+                    continue
+                
+                # Try to find a course_class section without schedule conflicts
+                assigned_course_class = None
+                
+                for cc in available_classes:
+                    # CHECK FOR DUPLICATE ENROLLMENT FIRST
+                    enrollment_key = (student['student_id'], cc['course_class_id'])
+                    if enrollment_key in enrolled_combinations:
+                        duplicate_count += 1
+                        continue
                     
-                    dates = ay_dates.get(ay['academic_year_id'])
-                    if not dates:
-                        start_date = date(ay['start_year'], 9, 1)
-                        end_date = date(ay['end_year'], 8, 31)
+                    # Check if this course_class conflicts with student's existing schedule IN THIS SEMESTER
+                    has_conflict = False
+                    
+                    semester_schedule = student_schedules[student['student_id']][cc['semester_id']]
+                    
+                    # Check each day this course_class meets
+                    for day in cc['days']:
+                        for existing_schedule in semester_schedule:
+                            existing_day, existing_start, existing_end = existing_schedule
+                            
+                            # Check if same day
+                            if day == existing_day:
+                                # Check time overlap
+                                if not (cc['end_period'] < existing_start or cc['start_period'] > existing_end):
+                                    has_conflict = True
+                                    conflict_count += 1
+                                    break
+                        
+                        if has_conflict:
+                            break
+                    
+                    # Check if section is full
+                    if not has_conflict:
+                        if cc['enrolled_count'] < cc['max_students']:
+                            assigned_course_class = cc
+                            cc['enrolled_count'] += 1
+                            break
+                
+                # If NO conflict-free section found, SKIP this enrollment
+                if not assigned_course_class:
+                    skipped_count += 1
+                    if is_fixed:
+                        self.add_statement(f"-- SKIPPED: STUDENT (fixed) - {course['subject_code']} in {course['start_year']} {course['semester_type']} (No conflict-free section)")
+                    continue
+                
+                # MARK AS ENROLLED (prevent duplicates)
+                enrollment_key = (student['student_id'], assigned_course_class['course_class_id'])
+                enrolled_combinations.add(enrollment_key)
+                
+                # Add to student's schedule for THIS SEMESTER
+                for day in assigned_course_class['days']:
+                    student_schedules[student['student_id']][assigned_course_class['semester_id']].append((
+                        day,
+                        assigned_course_class['start_period'],
+                        assigned_course_class['end_period']
+                    ))
+                
+                enrollment_id = self.generate_uuid()
+                
+                # Determine if this is a past, current, or future semester
+                is_past_semester = (course['start_year'] < 2025) or \
+                                (course['start_year'] == 2025 and course['semester_type'] == 'spring')
+                is_current_semester = (course['start_year'] == 2025 and course['semester_type'] == 'fall')
+                
+                if is_fixed:
+                    # FIXED STUDENT ACCOUNT - DETERMINISTIC GRADES
+                    if is_past_semester:
+                        # ALL past semesters: COMPLETED with full grades
+                        attendance = round(random.uniform(7.5, 9.5), 2)
+                        midterm = round(random.uniform(6.5, 9.0), 2)
+                        final = round(random.uniform(7.0, 9.5), 2)
+                        status = 'completed'
+                        
+                    elif is_current_semester:
+                        # Fall 2025: IN PROGRESS - ALL have attendance + midterm, NO finals
+                        attendance = round(random.uniform(7.5, 9.5), 2)
+                        midterm = round(random.uniform(6.5, 9.0), 2)
+                        final = None
+                        status = 'registered'
+                        
                     else:
-                        start_date = dates['start_date']
-                        end_date = dates['end_date']
-                    
-                    is_paid = 1 if ay['start_year'] <= 2025 else 0
-                    status = 'active' if ay['end_year'] >= 2025 else 'expired'
-                    
-                    insurance_rows.append([
-                        insurance_id,
-                        student['student_id'],
-                        ay['academic_year_id'],
-                        insurance_fee,
-                        start_date,
-                        end_date,
-                        status,
-                        is_paid
-                    ])
-                    
-                    # STORE insurance data for payment generation
-                    self.data['insurances'].append({
-                        'insurance_id': insurance_id,
-                        'student_id': student['student_id'],
-                        'academic_year_id': ay['academic_year_id'],
-                        'fee': insurance_fee,
-                        'start_date': start_date,
-                        'is_paid': is_paid
-                    })
-        
-        self.add_statement(f"-- Total health insurance records: {len(insurance_rows)}")
-        
-        self.bulk_insert('student_health_insurance',
-                        ['insurance_id', 'student_id', 'academic_year_id', 'insurance_fee',
-                        'start_date', 'end_date', 'insurance_status', 'is_paid'],
-                        insurance_rows)
-
-    def create_payments(self):
-        """
-        UPDATED: Generate payments using TWO separate tables
-        - payment_enrollment: for course tuition
-        - payment_insurance: for health insurance
-        """
-        self.add_statement("\n-- ==================== PAYMENTS ====================")
-        self.add_statement("-- Creating payments in TWO separate tables:")
-        self.add_statement("-- 1. payment_enrollment (course tuition)")
-        self.add_statement("-- 2. payment_insurance (health insurance)")
-        
-        enrollment_payment_rows = []
-        insurance_payment_rows = []
-        
-        # 1. COURSE TUITION PAYMENTS (payment_enrollment)
-        self.add_statement("\n-- Generating course tuition payments...")
-        
-        for enrollment in self.data.get('enrollments', []):
-            if enrollment.get('status') == 'completed' or enrollment.get('status') == 'registered':
-                payment_id = self.generate_uuid()
+                        # Future semesters: SKIP
+                        continue
+                        
+                else:
+                    # REGULAR STUDENTS - VARIED GRADES
+                    if is_past_semester:
+                        # Past semesters: Completed with full grades
+                        attendance = round(random.uniform(att_min, att_max), 2)
+                        midterm = round(random.uniform(mid_min, mid_max), 2)
+                        final = round(random.uniform(fin_min, fin_max), 2)
+                        status = 'completed'
+                        
+                    elif is_current_semester:
+                        # Fall 2025: In progress - varied completion
+                        rand = random.random()
+                        if rand < 0.60:  # 60% have midterm done
+                            attendance = round(random.uniform(att_min, att_max), 2)
+                            midterm = round(random.uniform(mid_min, mid_max), 2)
+                            final = None
+                        elif rand < 0.85:  # 25% have only attendance
+                            attendance = round(random.uniform(att_min, att_max), 2)
+                            midterm = None
+                            final = None
+                        else:  # 15% not started
+                            attendance = None
+                            midterm = None
+                            final = None
+                        status = 'registered'
+                        
+                    else:
+                        # Future semesters: SKIP
+                        continue
                 
-                # Payment date: shortly after enrollment
-                enrollment_date = enrollment['enrollment_date']
-                payment_date = enrollment_date + timedelta(days=random.randint(1, 15))
-                
-                enrollment_payment_rows.append([
-                    payment_id,
-                    enrollment['enrollment_id'],
-                    payment_date,
-                    f'Thanh toán học phí - {enrollment.get("subject_code", "")}'
+                # Insert enrollment
+                enrollment_rows.append([
+                    enrollment_id,
+                    student['student_id'],
+                    assigned_course_class['course_class_id'],
+                    course['semester_start'],
+                    status,
+                    None,  # cancellation_date
+                    None,  # cancellation_reason
+                    attendance,
+                    midterm,
+                    final
                 ])
-        
-        # 2. HEALTH INSURANCE PAYMENTS (payment_insurance)
-        self.add_statement("-- Generating health insurance payments...")
-        
-        for insurance in self.data.get('insurances', []):
-            if insurance['is_paid'] == 1:  # Only create payment if marked as paid
-                payment_id = self.generate_uuid()
                 
-                # Payment date: before start date
-                payment_date = insurance['start_date'] - timedelta(days=random.randint(7, 30))
+                # STORE enrollment data for payment generation (with course info)
+                self.data['enrollments'].append({
+                    'enrollment_id': enrollment_id,
+                    'student_id': student['student_id'],
+                    'course_class_id': assigned_course_class['course_class_id'],
+                    'course_id': course['course_id'],  # Store course_id
+                    'semester_id': course['semester_id'],  # Store semester_id
+                    'credits': course['credits'],
+                    'enrollment_date': course['semester_start'],
+                    'status': status
+                })
                 
-                insurance_payment_rows.append([
-                    payment_id,
-                    insurance['insurance_id'],
-                    payment_date,
-                    'Thanh toán bảo hiểm y tế sinh viên'
-                ])
+                # Log fixed student enrollments for debugging
+                if is_fixed:
+                    grade_status = "FULL GRADES" if final is not None else \
+                                "ATT+MID" if midterm is not None else \
+                                "ATT ONLY" if attendance is not None else "NO GRADES"
+                    self.add_statement(f"-- ENROLLED: STUDENT (fixed) - {course['subject_code']} - {course['start_year']} {course['semester_type']} - {grade_status}")
         
-        self.add_statement(f"-- Total course tuition payments: {len(enrollment_payment_rows)}")
-        self.add_statement(f"-- Total insurance payments: {len(insurance_payment_rows)}")
+        self.add_statement(f"\n-- ========================================")
+        self.add_statement(f"-- ENROLLMENT SUMMARY")
+        self.add_statement(f"-- ========================================")
+        self.add_statement(f"-- Total enrollments created: {len(enrollment_rows)}")
+        self.add_statement(f"-- Schedule conflicts detected: {conflict_count}")
+        self.add_statement(f"-- Duplicate enrollments prevented: {duplicate_count}")
+        self.add_statement(f"-- Enrollments skipped (no conflict-free slot): {skipped_count}")
         
-        # Insert into separate tables
-        self.bulk_insert('payment_enrollment',
-                        ['payment_id', 'enrollment_id', 'payment_date', 'notes'],
-                        enrollment_payment_rows)
-        
-        self.bulk_insert('payment_insurance',
-                        ['payment_id', 'insurance_id', 'payment_date', 'notes'],
-                        insurance_payment_rows)
+        # REMOVED is_paid column from insert
+        self.bulk_insert('student_enrollment',
+                        ['enrollment_id', 'student_id', 'course_class_id', 'enrollment_date',
+                        'enrollment_status', 'cancellation_date', 'cancellation_reason',
+                        'attendance_grade', 'midterm_grade', 'final_grade'],
+                        enrollment_rows)
 
     # ==================== CURRICULUM MAPPING ====================
     def map_class_curricula(self):
@@ -1715,7 +1815,7 @@ class SQLDataGenerator:
 
     def create_student_enrollments(self):
         """
-        UPDATED: Track enrollment IDs for payment generation
+        UPDATED: Track enrollment IDs and course info for payment generation
         """
         self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (REALISTIC & MASSIVE) ====================")
         self.add_statement("-- Students enrolled with STRICT schedule conflict checking")
@@ -1723,7 +1823,7 @@ class SQLDataGenerator:
         
         enrollment_rows = []
         
-        # IMPORTANT: Initialize enrollments list to track IDs
+        # IMPORTANT: Initialize enrollments list to track IDs and course info
         self.data['enrollments'] = []
         
         # Group course_classes by course_id
@@ -1897,18 +1997,17 @@ class SQLDataGenerator:
                     None,  # cancellation_reason
                     attendance,
                     midterm,
-                    final,
-                    1  # is_paid
+                    final
                 ])
                 
-                # STORE enrollment data for payment generation
+                # STORE enrollment data for payment generation (with course info)
                 self.data['enrollments'].append({
                     'enrollment_id': enrollment_id,
                     'student_id': student['student_id'],
                     'course_class_id': assigned_course_class['course_class_id'],
-                    'course_id': course['course_id'],
+                    'course_id': course['course_id'],  # Store course_id
+                    'semester_id': course['semester_id'],  # Store semester_id
                     'credits': course['credits'],
-                    'fee_per_credit': course.get('fee_per_credit', 600000),
                     'enrollment_date': course['semester_start'],
                     'status': status
                 })
@@ -1927,11 +2026,216 @@ class SQLDataGenerator:
         self.add_statement(f"-- Schedule conflicts detected: {conflict_count}")
         self.add_statement(f"-- Enrollments skipped (no conflict-free slot): {skipped_count}")
         
+        # REMOVED is_paid column from insert
         self.bulk_insert('student_enrollment',
                         ['enrollment_id', 'student_id', 'course_class_id', 'enrollment_date',
                         'enrollment_status', 'cancellation_date', 'cancellation_reason',
-                        'attendance_grade', 'midterm_grade', 'final_grade', 'is_paid'],
+                        'attendance_grade', 'midterm_grade', 'final_grade'],
                         enrollment_rows)
+
+    def create_student_health_insurance(self):
+        """
+        UPDATED: Store insurance IDs for payment generation
+        Now tracks insurance records that will be paid via payment_insurance table
+        """
+        self.add_statement("\n-- ==================== STUDENT HEALTH INSURANCE ====================")
+        
+        insurance_rows = []
+        insurance_fee = 500000  # 500,000 VND per year
+        
+        # IMPORTANT: Initialize insurances list
+        self.data['insurances'] = []
+        
+        # Build academic year date lookup from semesters
+        ay_dates = {}
+        for semester in self.data['semesters']:
+            ay_id = semester['academic_year_id']
+            if ay_id not in ay_dates:
+                ay_dates[ay_id] = {
+                    'start_date': semester['start_date'],
+                    'end_date': semester['end_date']
+                }
+            else:
+                if semester['start_date'] < ay_dates[ay_id]['start_date']:
+                    ay_dates[ay_id]['start_date'] = semester['start_date']
+                if semester['end_date'] > ay_dates[ay_id]['end_date']:
+                    ay_dates[ay_id]['end_date'] = semester['end_date']
+        
+        for student in self.data['students']:
+            student_start_year = student['class_start_year']
+            
+            for ay in self.data['academic_years']:
+                if ay['start_year'] >= student_start_year and ay['start_year'] <= 2025:
+                    insurance_id = self.generate_uuid()
+                    
+                    dates = ay_dates.get(ay['academic_year_id'])
+                    if not dates:
+                        start_date = date(ay['start_year'], 9, 1)
+                        end_date = date(ay['end_year'], 8, 31)
+                    else:
+                        start_date = dates['start_date']
+                        end_date = dates['end_date']
+                    
+                    is_paid = 1 if ay['start_year'] <= 2024 else 0  # Only past years are paid
+                    status = 'active' if ay['end_year'] >= 2025 else 'expired'
+                    
+                    insurance_rows.append([
+                        insurance_id,
+                        student['student_id'],
+                        ay['academic_year_id'],
+                        insurance_fee,
+                        start_date,
+                        end_date,
+                        status,
+                        is_paid
+                    ])
+                    
+                    # STORE insurance data for payment generation
+                    self.data['insurances'].append({
+                        'insurance_id': insurance_id,
+                        'student_id': student['student_id'],
+                        'academic_year_id': ay['academic_year_id'],
+                        'fee': insurance_fee,
+                        'start_date': start_date,
+                        'is_paid': is_paid
+                    })
+        
+        self.add_statement(f"-- Total health insurance records: {len(insurance_rows)}")
+        
+        self.bulk_insert('student_health_insurance',
+                        ['insurance_id', 'student_id', 'academic_year_id', 'insurance_fee',
+                        'start_date', 'end_date', 'insurance_status', 'is_paid'],
+                        insurance_rows)
+
+    def create_payments(self):
+        """
+        UPDATED: Generate payments using NEW schema structure
+        - payment_enrollment: for course tuition (with payment_enrollment_detail)
+        - payment_insurance: for health insurance
+        """
+        self.add_statement("\n-- ==================== PAYMENTS ====================")
+        self.add_statement("-- Creating payments in TWO separate tables:")
+        self.add_statement("-- 1. payment_enrollment + payment_enrollment_detail (course tuition)")
+        self.add_statement("-- 2. payment_insurance (health insurance)")
+        
+        enrollment_payment_rows = []
+        enrollment_detail_rows = []
+        insurance_payment_rows = []
+        
+        # =========================================================================
+        # 1. COURSE TUITION PAYMENTS (payment_enrollment + payment_enrollment_detail)
+        # =========================================================================
+        self.add_statement("\n-- Generating course tuition payments...")
+        
+        # Group enrollments by student and semester
+        enrollments_by_student_semester = defaultdict(list)
+        for enrollment in self.data.get('enrollments', []):
+            if enrollment.get('status') in ['completed', 'registered']:
+                # Get course info to find semester
+                course_class = next((cc for cc in self.data['course_classes'] 
+                                if cc['course_class_id'] == enrollment['course_class_id']), None)
+                if course_class:
+                    key = (enrollment['student_id'], course_class['semester_id'])
+                    enrollments_by_student_semester[key].append(enrollment)
+        
+        self.add_statement(f"-- Found {len(enrollments_by_student_semester)} unique student-semester combinations")
+        
+        # Create ONE payment_enrollment per student per semester
+        for (student_id, semester_id), enrollments in enrollments_by_student_semester.items():
+            payment_id = self.generate_uuid()
+            
+            # Calculate total amount for all courses in this semester
+            total_amount = 0
+            for enr in enrollments:
+                course = next((c for c in self.data['courses'] 
+                            if c['course_id'] == enr['course_id']), None)
+                if course:
+                    credits = course.get('credits', 0)
+                    fee_per_credit = course.get('fee_per_credit', 600000)
+                    total_amount += credits * fee_per_credit
+            
+            # Payment date: shortly after first enrollment date
+            first_enrollment_date = min(e['enrollment_date'] for e in enrollments)
+            payment_date = first_enrollment_date + timedelta(days=random.randint(1, 15))
+            
+            # Transaction reference (bank transfer code, etc.)
+            transaction_ref = f"TXN{random.randint(100000000, 999999999)}"
+            
+            # Insert payment_enrollment
+            enrollment_payment_rows.append([
+                payment_id,
+                student_id,
+                semester_id,
+                payment_date,
+                total_amount,
+                transaction_ref,
+                'completed',
+                f'Thanh toán học phí học kỳ'
+            ])
+            
+            # Create payment_enrollment_detail for EACH enrollment
+            for enr in enrollments:
+                detail_id = self.generate_uuid()
+                
+                course = next((c for c in self.data['courses'] 
+                            if c['course_id'] == enr['course_id']), None)
+                
+                if course:
+                    credits = course.get('credits', 0)
+                    fee_per_credit = course.get('fee_per_credit', 600000)
+                    amount_paid = credits * fee_per_credit
+                    
+                    enrollment_detail_rows.append([
+                        detail_id,
+                        payment_id,
+                        enr['enrollment_id'],
+                        amount_paid
+                    ])
+        
+        self.add_statement(f"-- Total payment_enrollment records: {len(enrollment_payment_rows)}")
+        self.add_statement(f"-- Total payment_enrollment_detail records: {len(enrollment_detail_rows)}")
+        
+        # =========================================================================
+        # 2. HEALTH INSURANCE PAYMENTS (payment_insurance)
+        # =========================================================================
+        self.add_statement("\n-- Generating health insurance payments...")
+        
+        for insurance in self.data.get('insurances', []):
+            if insurance['is_paid'] == 1:  # Only create payment if marked as paid
+                payment_id = self.generate_uuid()
+                
+                # Payment date: before start date
+                payment_date = insurance['start_date'] - timedelta(days=random.randint(7, 30))
+                
+                insurance_payment_rows.append([
+                    payment_id,
+                    insurance['insurance_id'],
+                    payment_date,
+                    'Thanh toán bảo hiểm y tế sinh viên'
+                ])
+        
+        self.add_statement(f"-- Total insurance payments: {len(insurance_payment_rows)}")
+        
+        # =========================================================================
+        # INSERT INTO DATABASE
+        # =========================================================================
+        
+        # Insert payment_enrollment (NO payment_method column!)
+        self.bulk_insert('payment_enrollment',
+                        ['payment_id', 'student_id', 'semester_id', 'payment_date', 
+                        'total_amount', 'transaction_reference', 'payment_status', 'notes'],
+                        enrollment_payment_rows)
+        
+        # Insert payment_enrollment_detail
+        self.bulk_insert('payment_enrollment_detail',
+                        ['payment_enrollment_detail_ID', 'payment_id', 'enrollment_id', 
+                        'amount_paid'],
+                        enrollment_detail_rows)
+        
+        # Insert payment_insurance
+        self.bulk_insert('payment_insurance',
+                        ['payment_id', 'insurance_id', 'payment_date', 'notes'],
+                        insurance_payment_rows)
 
     def create_exam_schedules(self):
         self.add_statement("\n-- ==================== EXAMS ====================")

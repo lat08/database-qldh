@@ -501,7 +501,6 @@ CREATE TABLE student_enrollment (
     attendance_grade NUMERIC(4,2) CHECK (attendance_grade BETWEEN 0 AND 10),
     midterm_grade NUMERIC(4,2) CHECK (midterm_grade BETWEEN 0 AND 10),
     final_grade NUMERIC(4,2) CHECK (final_grade BETWEEN 0 AND 10),
-    is_paid BIT NOT NULL DEFAULT 0,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -608,7 +607,7 @@ CREATE TABLE exam (
     exam_file_pdf NVARCHAR(1000),
     answer_key_pdf NVARCHAR(1000),
     notes NVARCHAR(500),
-    is_approved BIT NOT NULL DEFAULT 0,
+    exam_status NVARCHAR(20) DEFAULT 'pending' CHECK (exam_status IN ('pending', 'approved', 'rejected')), 
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -618,7 +617,9 @@ CREATE TABLE exam (
     is_active BIT NOT NULL DEFAULT 1,
 
     CONSTRAINT FK_exam_course FOREIGN KEY (course_id) 
-        REFERENCES course(course_id) ON DELETE CASCADE
+        REFERENCES course(course_id) ON DELETE CASCADE,
+    CONSTRAINT FK_exam_created_by FOREIGN KEY (created_by) 
+        REFERENCES admin(admin_id) ON DELETE NO ACTION
 );
 
 -- ============================================================
@@ -684,8 +685,12 @@ CREATE TABLE student_health_insurance (
 -- ============================================================
 CREATE TABLE payment_enrollment (
     payment_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    enrollment_id UNIQUEIDENTIFIER NOT NULL,
+    student_id UNIQUEIDENTIFIER NOT NULL,
+    semester_id UNIQUEIDENTIFIER NOT NULL,
     payment_date DATETIME2 NOT NULL DEFAULT GETDATE(),
+    total_amount NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    transaction_reference NVARCHAR(200), -- Bank transaction code or receipt number
+    payment_status NVARCHAR(20) DEFAULT 'completed' CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded')),
     notes NVARCHAR(500),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
@@ -695,9 +700,32 @@ CREATE TABLE payment_enrollment (
     is_deleted BIT NOT NULL DEFAULT 0,
     is_active BIT NOT NULL DEFAULT 1,
 
-    CONSTRAINT FK_payment_enrollment_enrollment FOREIGN KEY (enrollment_id) 
-        REFERENCES student_enrollment(enrollment_id) ON DELETE CASCADE
+    CONSTRAINT FK_payment_enrollment_student FOREIGN KEY (student_id)
+        REFERENCES student(student_id) ON DELETE NO ACTION,
+    CONSTRAINT FK_payment_enrollment_semester FOREIGN KEY (semester_id)
+        REFERENCES semester(semester_id) ON DELETE NO ACTION
 );
+
+-- ============================================================
+-- PAYMENT_ENROLLMENT_DETAIL (SPECIFY WHICH COURSES THIS PAYMENT PAYS FOR)
+-- ============================================================
+CREATE TABLE payment_enrollment_detail (
+    payment_enrollment_detail_ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    payment_id UNIQUEIDENTIFIER NOT NULL,
+    enrollment_id UNIQUEIDENTIFIER NOT NULL,
+    amount_paid NUMERIC(18,2) NOT NULL DEFAULT 0,
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    created_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+
+    CONSTRAINT FK_payment_mapping_payment FOREIGN KEY (payment_id)
+        REFERENCES payment_enrollment(payment_id) ON DELETE CASCADE,
+    CONSTRAINT FK_payment_mapping_enrollment FOREIGN KEY (enrollment_id)
+        REFERENCES student_enrollment(enrollment_id) ON DELETE CASCADE,
+    CONSTRAINT UQ_payment_mapping UNIQUE(payment_id, enrollment_id)
+);
+
 
 -- ============================================================
 -- PAYMENT_INSURANCE (Health Insurance Payments)
@@ -725,22 +753,6 @@ CREATE TABLE payment_insurance (
 CREATE TABLE room_booking (
     booking_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     room_id UNIQUEIDENTIFIER NOT NULL,
-    booking_type NVARCHAR(30) NOT NULL 
-        CHECK (booking_type IN (
-			'exam',
-            'lecture_hall',      -- giảng đường
-            'classroom',         -- phòng học
-            'computer_lab',      -- phòng máy tính
-            'laboratory',        -- phòng thí nghiệm
-            'meeting_room',      -- phòng họp
-            'gym_room',          -- phòng thể dục
-            'swimming_pool',     -- hồ bơi
-            'music_room',        -- phòng âm nhạc
-            'art_room',          -- phòng mỹ thuật
-            'library_room',      -- phòng thư viện
-            'self_study_room',   -- phòng tự học
-            'dorm_room'          -- ký túc xá / phòng ở
-        )),
     booking_date DATE NOT NULL,
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
