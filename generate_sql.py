@@ -2622,6 +2622,134 @@ class SQLDataGenerator:
                         'scheduled_date', 'visible_from', 'is_read', 'target_type',
                         'target_id', 'created_by_user', 'status'],
                         notification_rows)
+    
+    def create_documents(self):
+        """
+        Generate document records for course materials
+        Associates documents with course_classes and instructors
+        """
+        self.add_statement("\n-- ==================== COURSE DOCUMENTS ====================")
+        self.add_statement("-- Generating course material documents (PDFs, images, Excel files)")
+        
+        document_rows = []
+        
+        # Get available document files from media scanner
+        pdf_files = self.media_scanner.files['course_docs']['pdf']
+        image_files = self.media_scanner.files['course_docs']['images']
+        excel_files = self.media_scanner.files['course_docs']['excel']
+        
+        total_files = len(pdf_files) + len(image_files) + len(excel_files)
+        
+        if total_files == 0:
+            self.add_statement("-- WARNING: No course document files found in medias/course_docs/")
+            self.add_statement("-- Skipping document generation")
+            return
+        
+        self.add_statement(f"-- Found {len(pdf_files)} PDFs, {len(image_files)} images, {len(excel_files)} Excel files")
+        
+        # Document type descriptions
+        descriptions = {
+            'pdf': [
+                'Bài giảng lý thuyết',
+                'Tài liệu tham khảo',
+                'Đề cương môn học',
+                'Slide bài giảng',
+                'Tài liệu ôn tập'
+            ],
+            'image': [
+                'Hình ảnh minh họa',
+                'Sơ đồ tư duy',
+                'Biểu đồ phân tích',
+                'Ảnh thực hành'
+            ],
+            'excel': [
+                'Bảng dữ liệu mẫu',
+                'Điểm danh sinh viên',
+                'Kết quả thực hành',
+                'Bảng tính thống kê'
+            ]
+        }
+        
+        # File size ranges (in bytes)
+        file_size_ranges = {
+            'pdf': (100000, 5000000),
+            'docx': (50000, 2000000),
+            'doc': (50000, 2000000),
+            'pptx': (500000, 10000000),
+            'ppt': (500000, 10000000),
+            'xlsx': (50000, 1000000),
+            'xls': (50000, 1000000),
+            'jpg': (100000, 5000000),
+            'jpeg': (100000, 5000000),
+            'png': (100000, 5000000),
+            'zip': (1000000, 50000000),
+            'rar': (1000000, 50000000)
+        }
+        
+        # Generate documents for course_classes
+        # Each course_class gets 2-5 documents
+        for course_class in self.data['course_classes']:
+            num_docs = random.randint(2, 5)
+            
+            for i in range(num_docs):
+                document_id = self.generate_uuid()
+                
+                # Randomly select document type and file
+                doc_type = random.choice(['pdf', 'image', 'excel'])
+                
+                if doc_type == 'pdf' and pdf_files:
+                    file_name = random.choice(pdf_files)
+                    file_type = 'pdf'
+                    desc_pool = descriptions['pdf']
+                elif doc_type == 'image' and image_files:
+                    file_name = random.choice(image_files)
+                    file_ext = file_name.split('.')[-1].lower()
+                    file_type = file_ext if file_ext in ['jpg', 'jpeg', 'png'] else 'jpg'
+                    desc_pool = descriptions['image']
+                elif doc_type == 'excel' and excel_files:
+                    file_name = random.choice(excel_files)
+                    file_ext = file_name.split('.')[-1].lower()
+                    file_type = file_ext if file_ext in ['xlsx', 'xls'] else 'xlsx'
+                    desc_pool = descriptions['excel']
+                else:
+                    # Fallback to PDF if preferred type not available
+                    if pdf_files:
+                        file_name = random.choice(pdf_files)
+                        file_type = 'pdf'
+                        desc_pool = descriptions['pdf']
+                    else:
+                        continue
+                
+                # Build file path URL using correct bucket
+                file_path = self.media_scanner.build_url('instructor_documents', file_name)
+                
+                # Generate file size
+                size_min, size_max = file_size_ranges.get(file_type, (100000, 5000000))
+                file_size = random.randint(size_min, size_max)
+                
+                # Random description
+                description = random.choice(desc_pool)
+                
+                # Uploaded by instructor
+                uploaded_by = course_class.get('instructor_id')
+                
+                document_rows.append([
+                    document_id,
+                    course_class['course_class_id'],
+                    file_name,
+                    file_path,
+                    file_type,
+                    file_size,
+                    uploaded_by,
+                    description
+                ])
+        
+        self.add_statement(f"-- Total documents generated: {len(document_rows)}")
+        
+        self.bulk_insert('document',
+                        ['document_id', 'course_class_id', 'file_name', 'file_path',
+                        'file_type', 'file_size', 'uploaded_by', 'description'],
+                        document_rows)
         
     def save_to_file(self):
         """
@@ -2685,6 +2813,7 @@ class SQLDataGenerator:
         self.create_courses()
         self.create_course_classes()
         self.create_student_enrollments()
+        self.create_documents() 
         
         # Exams and assessments
         self.create_exams_and_exam_classes()  # NEW/UPDATED
