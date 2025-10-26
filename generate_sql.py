@@ -20,6 +20,85 @@ import base64
 from datetime import datetime, date, timedelta
 from collections import defaultdict
 
+# ==================== MEDIA CONFIGURATION ====================
+SUPABASE_BASE_URL = "https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public"
+
+MEDIA_BUCKETS = {
+    'profile_pics': 'profile_pics',
+    'instructor_documents': 'instructor_documents/demo',
+    'room_pics': 'room_pics',
+    'exams': 'exams/demo',
+    'regulations': 'regulations'
+}
+
+class MediaScanner:
+    """Scans media folders and tracks available files"""
+    def __init__(self, media_base_path='medias'):
+        self.media_base_path = media_base_path
+        self.files = {
+            'profile_pics': [],
+            'course_docs': {'pdf': [], 'images': [], 'excel': []},
+            'room_pics': [],
+            'regulations': []
+        }
+        self.scan_files()
+    
+    def scan_files(self):
+        """Scan all media folders and categorize files"""
+        # Profile pictures
+        profile_path = os.path.join(self.media_base_path, 'profile_pics')
+        if os.path.exists(profile_path):
+            self.files['profile_pics'] = [
+                f for f in os.listdir(profile_path) 
+                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif'))
+            ]
+        
+        # Course documents
+        course_docs_path = os.path.join(self.media_base_path, 'course_docs')
+        if os.path.exists(course_docs_path):
+            for file in os.listdir(course_docs_path):
+                file_lower = file.lower()
+                if file_lower.endswith('.pdf'):
+                    self.files['course_docs']['pdf'].append(file)
+                elif file_lower.endswith(('.jpg', '.jpeg', '.png', '.gif')):
+                    self.files['course_docs']['images'].append(file)
+                elif file_lower.endswith(('.xls', '.xlsx', '.xlsm')):
+                    self.files['course_docs']['excel'].append(file)
+        
+        # Room pictures
+        room_pics_path = os.path.join(self.media_base_path, 'room_pics')
+        if os.path.exists(room_pics_path):
+            self.files['room_pics'] = [
+                f for f in os.listdir(room_pics_path)
+                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif'))
+            ]
+        
+        # Regulations (if stored locally)
+        regulations_path = os.path.join(self.media_base_path, 'regulations')
+        if os.path.exists(regulations_path):
+            self.files['regulations'] = [
+                f for f in os.listdir(regulations_path)
+                if f.lower().endswith('.pdf')
+            ]
+    
+    def get_random_file(self, category, subcategory=None):
+        """Get a random file from a category"""
+        if subcategory:
+            files = self.files.get(category, {}).get(subcategory, [])
+        else:
+            files = self.files.get(category, [])
+        
+        if files:
+            return random.choice(files)
+        return None
+    
+    def build_url(self, bucket_key, filename):
+        """Build Supabase storage URL"""
+        bucket_path = MEDIA_BUCKETS.get(bucket_key)
+        if not bucket_path:
+            return None
+        return f"{SUPABASE_BASE_URL}/{bucket_path}/{filename}"
+
 class SpecParser:
     def __init__(self, spec_file):
         self.spec_file = spec_file
@@ -54,6 +133,10 @@ class SQLDataGenerator:
         self.spec_file = spec_file
         self.spec_data = SpecParser(spec_file).parse()
         self.sql_statements = []
+        
+        # Initialize media scanner
+        self.media_scanner = MediaScanner()
+        
         self.data = {
             'persons': [],
             'user_accounts': [],
@@ -84,7 +167,7 @@ class SQLDataGenerator:
         self.students_config = self.spec_data.get('students_config', {})
         self.output_config = self.spec_data.get('output_config', {})
         self.names_config = self.spec_data.get('names_config', {})
-        
+
     def generate_uuid(self):
         return str(uuid.uuid4()).upper()
     
@@ -260,13 +343,18 @@ class SQLDataGenerator:
         
         instructor_citizen_id = f"{random.randint(100000000000, 999999999999)}"
         
+        # Get random profile picture
+        profile_pic = self.media_scanner.get_random_file('profile_pics')
+        profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+        
         person_rows.append([person_id, self.test_config.get('instructor_name'), 
                         self.test_config.get('instructor_dob', '1985-01-01'),
                         self.test_config.get('instructor_gender', 'female'),
                         self.test_config.get('instructor_email'),
                         self.test_config.get('instructor_phone'),
                         instructor_citizen_id,
-                        'TP Hồ Chí Minh'])
+                        'TP Hồ Chí Minh',
+                        profile_pic_url])
         
         user_rows.append([user_id, person_id, self.test_config.get('instructor_username'),
                         password_hash, salt_b64, 'Instructor', 'active'])
@@ -297,30 +385,109 @@ class SQLDataGenerator:
         
         admin_citizen_id = f"{random.randint(100000000000, 999999999999)}"
         
+        # Get random profile picture
+        profile_pic = self.media_scanner.get_random_file('profile_pics')
+        profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+        
         person_rows.append([person_id, self.test_config.get('admin_name'),
                         self.test_config.get('admin_dob'),
                         self.test_config.get('admin_gender'),
                         self.test_config.get('admin_email'),
                         self.test_config.get('admin_phone'),
                         admin_citizen_id,
-                        'TP Hồ Chí Minh'])
+                        'TP Hồ Chí Minh',
+                        profile_pic_url])
         
         user_rows.append([user_id, person_id, self.test_config.get('admin_username'),
                         password_hash, salt_b64, 'Admin', 'active'])
         
         admin_rows.append([admin_id, person_id, self.test_config.get('admin_code'), self.test_config.get('admin_position'), 'active'])
-    
+
         self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
         
         self.add_statement(f"-- ADMIN IDs: person={person_id}, user={user_id}, admin={admin_id}")
         
         # Insert all fixed accounts
-        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address'], person_rows)
+        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture_url'], person_rows)
         self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
         self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
         self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
-                       
+        
     def create_regular_staff(self):
+        self.add_statement("\n-- ==================== REGULAR INSTRUCTORS & ADMINS ====================")
+        
+        first_names = self.names_config.get('first_names', '').split(', ')
+        middle_names = self.names_config.get('middle_names', '').split(', ')
+        last_names_male = self.names_config.get('last_names_male', '').split(', ')
+        last_names_female = self.names_config.get('last_names_female', '').split(', ')
+        
+        person_rows = []
+        user_rows = []
+        instructor_rows = []
+        admin_rows = []
+        
+        # Instructors
+        num_instructors = int(self.staff_config.get('regular_instructors', 12))
+        for i in range(num_instructors):
+            gender = random.choice(['male', 'female'])
+            last_pool = last_names_male if gender == 'male' else last_names_female
+            
+            person_id = self.generate_uuid()
+            full_name = f"{random.choice(first_names)} {random.choice(middle_names)} {random.choice(last_pool)}"
+            email = f"gv{i+1:02d}@edu.vn"
+            phone = f"0{random.randint(300000000, 999999999)}"
+            dob = date(random.randint(1970, 1990), random.randint(1, 12), random.randint(1, 28))
+            
+            citizen_id = f"{random.randint(100000000000, 999999999999)}"
+            
+            # Get random profile picture
+            profile_pic = self.media_scanner.get_random_file('profile_pics')
+            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+            
+            person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 'TP Hồ Chí Minh', profile_pic_url])
+            
+            user_id = self.generate_uuid()
+            username = f"gv{i+1:02d}"
+            user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Instructor', 'active'])
+            
+            instructor_id = self.generate_uuid()
+            degree = random.choice(['Tiến sĩ', 'Thạc sĩ', 'Cử nhân'])
+            specialization = random.choice(['Công nghệ thông tin', 'Kinh tế', 'Kỹ thuật', 'Khoa học'])
+            hire_date = date(random.randint(2010, 2020), random.randint(1, 12), 1)
+            instructor_rows.append([instructor_id, person_id, f"GV{i+1:04d}", degree, specialization, None, hire_date, 'active'])
+            
+            self.data['instructors'].append({'instructor_id': instructor_id, 'person_id': person_id, 'full_name': full_name})
+        
+        # Admins
+        num_admins = int(self.staff_config.get('regular_admins', 2))
+        for i in range(num_admins):
+            person_id = self.generate_uuid()
+            full_name = f"{random.choice(first_names)} {random.choice(middle_names)} {random.choice(last_names_male)}"
+            email = f"admin{i+1}@edu.vn"
+            phone = f"0{random.randint(300000000, 999999999)}"
+            
+            citizen_id = f"{random.randint(100000000000, 999999999999)}"
+            
+            # Get random profile picture
+            profile_pic = self.media_scanner.get_random_file('profile_pics')
+            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+            
+            person_rows.append([person_id, full_name, date(1975, 1, 1), 'male', email, phone, citizen_id, 'TP Hồ Chí Minh', profile_pic_url])
+            
+            user_id = self.generate_uuid()
+            username = f"admin{i+1}"
+            user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Admin', 'active'])
+            
+            admin_id = self.generate_uuid()
+            admin_rows.append([admin_id, person_id, f"AD{i+1:04d}", 'Quản trị viên', 'active'])
+            
+            self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
+        
+        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture_url'], person_rows)
+        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
+        self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
+        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
+        
         self.add_statement("\n-- ==================== REGULAR INSTRUCTORS & ADMINS ====================")
         
         first_names = self.names_config.get('first_names', '').split(', ')
