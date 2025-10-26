@@ -779,6 +779,8 @@ CREATE TABLE payment_insurance (
     payment_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     insurance_id UNIQUEIDENTIFIER NOT NULL,
     payment_date DATETIME2 NOT NULL DEFAULT GETDATE(),
+    payment_status NVARCHAR(20) DEFAULT 'pending'
+         CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded')),
     notes NVARCHAR(500),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
