@@ -723,7 +723,22 @@ CREATE TABLE payment_insurance (
 CREATE TABLE room_booking (
     booking_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     room_id UNIQUEIDENTIFIER NOT NULL,
-    booking_type NVARCHAR(50) NOT NULL CHECK (booking_type IN ('course_class', 'exam', 'event', 'meeting', 'other')),
+    booking_type NVARCHAR(30) NOT NULL 
+        CHECK (booking_type IN (
+			'exam',
+            'lecture_hall',      -- giảng đường
+            'classroom',         -- phòng học
+            'computer_lab',      -- phòng máy tính
+            'laboratory',        -- phòng thí nghiệm
+            'meeting_room',      -- phòng họp
+            'gym_room',          -- phòng thể dục
+            'swimming_pool',     -- hồ bơi
+            'music_room',        -- phòng âm nhạc
+            'art_room',          -- phòng mỹ thuật
+            'library_room',      -- phòng thư viện
+            'self_study_room',   -- phòng tự học
+            'dorm_room'          -- ký túc xá / phòng ở
+        )),
     booking_date DATE NOT NULL,
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
@@ -744,7 +759,6 @@ CREATE TABLE room_booking (
         REFERENCES user_account(user_id) ON DELETE NO ACTION,
     CONSTRAINT CHK_room_booking_times CHECK (end_time > start_time)
 );
-
 -- ============================================================
 -- REGULATION
 -- ============================================================
