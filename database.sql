@@ -2,6 +2,58 @@ USE EduManagement;
 GO
 
 -- ============================================================
+-- ROLE (Vai trò người dùng)
+-- ============================================================
+CREATE TABLE role (
+    role_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    role_name NVARCHAR(50) NOT NULL UNIQUE,
+    description NVARCHAR(500),
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1
+);
+
+-- ============================================================
+-- PERMISSION (Quyền hạn)
+-- ============================================================
+CREATE TABLE permission (
+    permission_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    permission_name NVARCHAR(100) NOT NULL UNIQUE,
+    permission_description NVARCHAR(500),
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1
+);
+
+-- ============================================================
+-- ROLE_PERMISSION (Phân quyền cho vai trò)
+-- ============================================================
+CREATE TABLE role_permission (
+    role_permission_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    role_id UNIQUEIDENTIFIER NOT NULL,
+    permission_id UNIQUEIDENTIFIER NOT NULL,
+    is_active BIT NOT NULL DEFAULT 1,
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    created_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    
+    CONSTRAINT FK_role_permission_role FOREIGN KEY (role_id)
+        REFERENCES role(role_id) ON DELETE CASCADE,
+    CONSTRAINT FK_role_permission_permission FOREIGN KEY (permission_id)
+        REFERENCES permission(permission_id) ON DELETE CASCADE,
+    CONSTRAINT UQ_role_permission UNIQUE (role_id, permission_id)
+);
+
+-- ============================================================
 -- PERSON (Thông tin cá nhân)
 -- ============================================================
 CREATE TABLE person (
@@ -24,7 +76,7 @@ CREATE TABLE person (
 );
 
 -- ============================================================
--- USER ACCOUNT
+-- USER ACCOUNT (Modified - uses role_id)
 -- ============================================================
 CREATE TABLE user_account (
     user_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
@@ -32,7 +84,7 @@ CREATE TABLE user_account (
     username NVARCHAR(100) NOT NULL UNIQUE,
     password_hash NVARCHAR(255) NOT NULL,
     password_salt NVARCHAR(255) NOT NULL,
-    role_name NVARCHAR(50) NOT NULL CHECK (role_name IN ('Admin', 'Instructor', 'Student')),
+    role_id UNIQUEIDENTIFIER NOT NULL,
     email_verified BIT DEFAULT 0,
     email_verification_code NVARCHAR(255),
     account_status NVARCHAR(20) NOT NULL DEFAULT 'active' CHECK (account_status IN ('active', 'inactive', 'suspended')),
@@ -46,24 +98,9 @@ CREATE TABLE user_account (
     is_active BIT NOT NULL DEFAULT 1,
 
     CONSTRAINT FK_user_account_person FOREIGN KEY (person_id)
-        REFERENCES person(person_id) ON DELETE CASCADE
-);
-
--- ============================================================
--- PERMISSIONS
--- ============================================================
-CREATE TABLE permission (
-    permission_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    role_name NVARCHAR(50) NOT NULL CHECK (role_name IN ('Admin', 'Instructor', 'Student')),
-    permission_name NVARCHAR(255) NOT NULL UNIQUE,
-    description NVARCHAR(MAX),
-
-    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at DATETIME2 NULL,
-    created_by UNIQUEIDENTIFIER NULL,
-    updated_by UNIQUEIDENTIFIER NULL,
-    is_deleted BIT NOT NULL DEFAULT 0,
-    is_active BIT NOT NULL DEFAULT 1
+        REFERENCES person(person_id) ON DELETE CASCADE,
+    CONSTRAINT FK_user_account_role FOREIGN KEY (role_id)
+        REFERENCES role(role_id) ON DELETE NO ACTION
 );
 
 -- ============================================================

@@ -15,12 +15,6 @@ class curriculum_detail {
   department_id
   subject_id
   semester_id
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class department {
   department_id
@@ -28,12 +22,6 @@ class department {
   department_code
   faculty_id
   head_of_department_id
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class document {
   document_id
@@ -44,12 +32,6 @@ class document {
   file_size
   uploaded_by
   description
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class exam_class {
   exam_class_id
@@ -60,12 +42,21 @@ class exam_class {
   start_time
   duration_minutes
   exam_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
+}
+class exam_entry {
+  exam_entry_id
+  exam_id
+  course_class_id
+  entry_code
+  display_name
+  question_file_path
+  answer_file_path
+  duration_minutes
+  is_picked
+  entry_status
+  rejection_reason
+  reviewed_by
+  reviewed_at
 }
 class faculty {
   faculty_id
@@ -73,12 +64,6 @@ class faculty {
   faculty_code
   dean_id
   faculty_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class notification_schedule {
   schedule_id
@@ -92,38 +77,24 @@ class notification_schedule {
   target_id
   created_by_user
   status
-  created_at
-  updated_at
-  is_deleted
-  is_active
 }
 class payment_enrollment_detail {
   payment_enrollment_detail_ID
   payment_id
   enrollment_id
   amount_paid
-  created_at
-  created_by
-  is_deleted
-  CONSTRAINT
 }
 class payment_group {
   id
   student_course_ids
-  created_at
   status
 }
 class payment_insurance {
   payment_id
   insurance_id
   payment_date
+  payment_status
   notes
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class payment_postponement_request {
   request_id
@@ -136,25 +107,6 @@ class payment_postponement_request {
   reviewed_by
   reviewed_at
   review_notes
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
-}
-class permission {
-  permission_id
-  role_name
-  permission_name
-  description
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class regulation {
   regulation_id
@@ -164,20 +116,17 @@ class regulation {
   regulation_description
   expire_date
   created_by_admin
-  created_at
-  updated_at
-  updated_by
-  is_deleted
+}
+class role_permission {
+  role_permission_id
+  role_id
+  permission_id
   is_active
 }
 class room_amenity_mapping {
   room_amenity_mapping_id
   room_id
   amenity_id
-  created_at
-  created_by
-  is_deleted
-  CONSTRAINT
 }
 class room_booking {
   booking_id
@@ -188,13 +137,6 @@ class room_booking {
   booked_by
   purpose
   booking_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
 }
 class schedule_change {
   schedule_change_id
@@ -207,13 +149,6 @@ class schedule_change {
   start_period
   end_period
   reason
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
 }
 class student_verification_request {
   verification_request_id
@@ -221,12 +156,6 @@ class student_verification_request {
   language
   reason
   request_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class subject {
   subject_id
@@ -239,12 +168,6 @@ class subject {
   department_id
   prerequisite_subject_id
   subject_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class theme_history {
   theme_history_id
@@ -254,16 +177,6 @@ class theme_history {
   previous_values
   new_values
   change_reason
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
-  CONSTRAINT
-  CONSTRAINT
-  CONSTRAINT
 }
 class user_otp {
   otp_id
@@ -271,7 +184,6 @@ class user_otp {
   otp_code
   expired_at
   is_used
-  created_at
 }
 class user_refresh_token {
   token_id
@@ -279,51 +191,42 @@ class user_refresh_token {
   refresh_token
   expires_at
   is_revoked
-  created_at
 }
 
 ' Level 1 tables
+class admin {
+  admin_id
+  person_id
+  admin_code
+  position
+  admin_status
+}
 class exam {
   exam_id
   course_id
   exam_format
   exam_type
-  exam_file_pdf
-  answer_key_pdf
   notes
+  num_exam_codes_needed
   exam_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class payment_enrollment {
   payment_id
   student_id
   semester_id
   payment_date
-  total_amount
   transaction_reference
   payment_status
   notes
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
+}
+class permission {
+  permission_id
+  permission_name
+  permission_description
 }
 class room_amenity {
   amenity_id
   amenity_name
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class student_enrollment {
   enrollment_id
@@ -336,13 +239,6 @@ class student_enrollment {
   attendance_grade
   midterm_grade
   final_grade
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
 }
 class student_health_insurance {
   insurance_id
@@ -352,14 +248,6 @@ class student_health_insurance {
   start_date
   end_date
   insurance_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
-  CONSTRAINT
 }
 class theme_configurations {
   theme_config_id
@@ -369,16 +257,6 @@ class theme_configurations {
   scope_type
   scope_target
   theme_variables
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
-  CONSTRAINT
-  CONSTRAINT
-  CONSTRAINT
 }
 class user_account {
   user_id
@@ -386,33 +264,14 @@ class user_account {
   username
   password_hash
   password_salt
-  role_name
+  role_id
   email_verified
   email_verification_code
   account_status
   last_login_time
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 
 ' Level 2 tables
-class admin {
-  admin_id
-  person_id
-  admin_code
-  position
-  admin_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-}
 class course_class {
   course_class_id
   course_id
@@ -425,14 +284,11 @@ class course_class {
   start_period
   end_period
   course_class_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
-  CONSTRAINT
+}
+class role {
+  role_id
+  role_name
+  description
 }
 class student {
   student_id
@@ -440,12 +296,6 @@ class student {
   student_code
   class_id
   enrollment_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 
 ' Level 3 tables
@@ -459,12 +309,6 @@ class class {
   end_academic_year_id
   curriculum_desc_pdf
   class_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class course {
   course_id
@@ -472,12 +316,6 @@ class course {
   semester_id
   fee_per_credit
   course_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class room {
   room_id
@@ -488,12 +326,6 @@ class room {
   building_id
   room_status
   room_picture_path
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 
 ' Level 4 tables
@@ -503,12 +335,6 @@ class building {
   building_code
   address
   building_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class instructor {
   instructor_id
@@ -519,12 +345,6 @@ class instructor {
   department_id
   hire_date
   employment_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 class semester {
   semester_id
@@ -536,15 +356,6 @@ class semester {
   registration_start_date
   registration_end_date
   semester_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
-  CONSTRAINT
-  CONSTRAINT
 }
 
 ' Level 5 tables
@@ -554,13 +365,6 @@ class academic_year {
   start_date
   end_date
   academic_year_status
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
-  CONSTRAINT
 }
 class person {
   person_id
@@ -572,66 +376,65 @@ class person {
   citizen_id
   address
   profile_picture
-  created_at
-  updated_at
-  created_by
-  updated_by
-  is_deleted
-  is_active
 }
 
 ' Relationships
-person --> user_account
-user_account --> user_otp
-user_account --> user_refresh_token
-building --> room
-room --> room_amenity_mapping
-room_amenity --> room_amenity_mapping
-academic_year --> semester
-faculty --> department
-person --> instructor
-department --> instructor
-department --> subject
-department --> class
-instructor --> class
-academic_year --> class
-person --> student
-class --> student
-person --> admin
-department --> curriculum_detail
-subject --> curriculum_detail
-semester --> curriculum_detail
-subject --> course
-semester --> course
-course --> course_class
-instructor --> course_class
-room --> course_class
-student --> student_enrollment
-course_class --> student_enrollment
-course_class --> schedule_change
-room --> schedule_change
-course_class --> document
-instructor --> document
-user_account --> notification_schedule
-course --> exam
-admin --> exam
-exam --> exam_class
-course_class --> exam_class
-room --> exam_class
-instructor --> exam_class
-student --> student_health_insurance
-academic_year --> student_health_insurance
-student --> payment_enrollment
-semester --> payment_enrollment
-payment_enrollment --> payment_enrollment_detail
-student_enrollment --> payment_enrollment_detail
-student_health_insurance --> payment_insurance
-room --> room_booking
-user_account --> room_booking
-admin --> regulation
-student --> student_verification_request
-student --> payment_postponement_request
-semester --> payment_postponement_request
-admin --> payment_postponement_request
-theme_configurations --> theme_history
+role <-- role_permission
+permission <-- role_permission
+person <-- user_account
+role <-- user_account
+user_account <-- user_otp
+user_account <-- user_refresh_token
+building <-- room
+room <-- room_amenity_mapping
+room_amenity <-- room_amenity_mapping
+academic_year <-- semester
+faculty <-- department
+person <-- instructor
+department <-- instructor
+department <-- subject
+department <-- class
+instructor <-- class
+academic_year <-- class
+person <-- student
+class <-- student
+person <-- admin
+department <-- curriculum_detail
+subject <-- curriculum_detail
+semester <-- curriculum_detail
+subject <-- course
+semester <-- course
+course <-- course_class
+instructor <-- course_class
+room <-- course_class
+student <-- student_enrollment
+course_class <-- student_enrollment
+course_class <-- schedule_change
+room <-- schedule_change
+course_class <-- document
+instructor <-- document
+user_account <-- notification_schedule
+course <-- exam
+exam <-- exam_entry
+course_class <-- exam_entry
+admin <-- exam_entry
+exam <-- exam_class
+course_class <-- exam_class
+room <-- exam_class
+instructor <-- exam_class
+student <-- student_health_insurance
+academic_year <-- student_health_insurance
+student <-- payment_enrollment
+semester <-- payment_enrollment
+payment_enrollment <-- payment_enrollment_detail
+student_enrollment <-- payment_enrollment_detail
+student_health_insurance <-- payment_insurance
+room <-- room_booking
+user_account <-- room_booking
+admin <-- regulation
+student <-- student_verification_request
+student <-- payment_postponement_request
+semester <-- payment_postponement_request
+admin <-- payment_postponement_request
+theme_configurations <-- theme_history
 @enduml

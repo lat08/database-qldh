@@ -38,6 +38,7 @@ def parse_sql_schema(sql_content):
         if current_line.strip():
             lines.append(current_line.strip())
 
+
         for line in lines:
             if not line:
                 continue
@@ -45,9 +46,13 @@ def parse_sql_schema(sql_content):
             if fk:
                 relationships.append((match.group(1), fk.group(1), fk.group(2), fk.group(3)))
                 continue
+            # Skip CONSTRAINT, PRIMARY KEY, UNIQUE, CHECK, etc.
+            if re.match(r'(CONSTRAINT|PRIMARY|UNIQUE|CHECK|INDEX)\b', line, re.IGNORECASE):
+                continue
             m = re.match(r'(\w+)\s+', line)
             if m:
                 columns.append(m.group(1))
+
         tables[table_name] = columns
 
     return tables, relationships
@@ -114,12 +119,19 @@ def generate_plantuml(tables, relationships):
     for t, lvl in levels.items():
         tables_by_level[lvl].append(t)
 
+    # Columns to exclude from diagram
+    EXCLUDED_COLUMNS = {'created_at', 'updated_at', 'created_by', 'updated_by', 'is_deleted', 'is_active'}
+
     for lvl in sorted(tables_by_level.keys()):
         lines.append(f"' Level {lvl} tables")
         for t in sorted(tables_by_level[lvl]):
             lines.append(f"class {t} {{")
             for c in tables[t]:
-                lines.append(f"  {c}")
+                # Exception: show is_active for role_permission table
+                if t == 'role_permission' and c == 'is_active':
+                    lines.append(f"  {c}")
+                elif c not in EXCLUDED_COLUMNS:
+                    lines.append(f"  {c}")
             lines.append("}")
         lines.append("")
 
@@ -127,7 +139,7 @@ def generate_plantuml(tables, relationships):
     seen = set()
     for f, _, t, _ in relationships:
         if f != t and (f, t) not in seen:
-            lines.append(f"{t} --> {f}")  # arrow from parent(top) → child(bottom)
+            lines.append(f"{t} <-- {f}")  # arrow from parent(top) → child(bottom)
             seen.add((f, t))
 
     lines.append("@enduml")

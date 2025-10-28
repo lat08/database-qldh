@@ -37,18 +37,174 @@ instructor_degree: Tiến sĩ
 instructor_specialization: Công nghệ thông tin
 instructor_hire_date: 2015-09-01
 
-# ADMIN account - Simple IDs for easy testing
-admin_person_id: 00000000-0000-0000-0000-000000000021
-admin_user_id: 00000000-0000-0000-0000-000000000022
-admin_id: 00000000-0000-0000-0000-000000000023
-admin_username: ADMIN
-admin_email: admin.test@edu.vn
-admin_name: Lê Minh Test Admin
-admin_code: AD9999
-admin_gender: male
-admin_dob: 1980-07-10
-admin_phone: 0909876543
-admin_position: Quản trị viên hệ thống
+# ADMIN PRINCIPAL (Hiệu trưởng) - Full permissions
+principal_person_id: 00000000-0000-0000-0000-000000000021
+principal_user_id: 00000000-0000-0000-0000-000000000022
+principal_admin_id: 00000000-0000-0000-0000-000000000023
+principal_username: PRINCIPAL
+principal_email: principal.test@edu.vn
+principal_name: Lê Minh Test Principal
+principal_code: AD0001
+principal_gender: male
+principal_dob: 1975-01-10
+principal_phone: 0909111111
+principal_position: Hiệu trưởng
+
+# ADMIN ACCOUNTANT (Kế toán)
+accountant_person_id: 00000000-0000-0000-0000-000000000031
+accountant_user_id: 00000000-0000-0000-0000-000000000032
+accountant_admin_id: 00000000-0000-0000-0000-000000000033
+accountant_username: ACCOUNTANT
+accountant_email: accountant.test@edu.vn
+accountant_name: Phạm Thị Test Accountant
+accountant_code: AD0002
+accountant_gender: female
+accountant_dob: 1980-05-15
+accountant_phone: 0909222222
+accountant_position: Kế toán trưởng
+
+# ADMIN ACADEMIC (Quản lý đào tạo)
+academic_person_id: 00000000-0000-0000-0000-000000000041
+academic_user_id: 00000000-0000-0000-0000-000000000042
+academic_admin_id: 00000000-0000-0000-0000-000000000043
+academic_username: ACADEMIC
+academic_email: academic.test@edu.vn
+academic_name: Trương Văn Test Academic
+academic_code: AD0003
+academic_gender: male
+academic_dob: 1978-08-20
+academic_phone: 0909333333
+academic_position: Trưởng phòng Đào tạo
+
+# ADMIN HR (Nhân sự)
+hr_person_id: 00000000-0000-0000-0000-000000000051
+hr_user_id: 00000000-0000-0000-0000-000000000052
+hr_admin_id: 00000000-0000-0000-0000-000000000053
+hr_username: HR
+hr_email: hr.test@edu.vn
+hr_name: Hoàng Thị Test HR
+hr_code: AD0004
+hr_gender: female
+hr_dob: 1982-11-25
+hr_phone: 0909444444
+hr_position: Trưởng phòng Nhân sự
+
+# ADMIN FACILITIES (Quản lý cơ sở vật chất)
+facilities_person_id: 00000000-0000-0000-0000-000000000061
+facilities_user_id: 00000000-0000-0000-0000-000000000062
+facilities_admin_id: 00000000-0000-0000-0000-000000000063
+facilities_username: FACILITIES
+facilities_email: facilities.test@edu.vn
+facilities_name: Vũ Văn Test Facilities
+facilities_code: AD0005
+facilities_gender: male
+facilities_dob: 1979-03-30
+facilities_phone: 0909555555
+facilities_position: Trưởng phòng Cơ sở vật chất
+
+# ============================================================
+# ROLES DEFINITION
+# ============================================================
+[roles]
+# Format: RoleName | Description
+
+Student | Sinh viên
+Instructor | Giảng viên
+Admin_Principal | Hiệu trưởng (Toàn quyền)
+Admin_Accountant | Kế toán (Học phí, báo cáo tài chính)
+Admin_Academic | Quản lý đào tạo (Môn học, chương trình đào tạo, khóa học, kỳ thi)
+Admin_HR | Nhân sự (Hồ sơ sinh viên, giảng viên)
+Admin_Facilities | Quản lý cơ sở vật chất (Phòng học, trang thiết bị)
+
+# ============================================================
+# PERMISSIONS DEFINITION
+# ============================================================
+[permissions]
+# Format: PermissionName | Description
+
+# Authentication
+login_system | Đăng nhập hệ thống
+
+# Student permissions
+register_courses | Đăng ký môn học
+view_own_grades | Xem điểm của bản thân
+pay_tuition | Thanh toán học phí
+view_own_schedule | Xem lịch học của bản thân
+view_course_materials | Xem tài liệu học tập
+request_documents | Yêu cầu giấy tờ xác nhận
+
+# Instructor permissions
+input_grades | Nhập điểm sinh viên
+view_student_list | Xem danh sách sinh viên
+view_teaching_schedule | Xem lịch giảng dạy
+upload_course_materials | Upload tài liệu học tập
+submit_exam | Nộp đề thi
+manage_attendance | Quản lý điểm danh
+receive_payment | Nhận thanh toán (lương, thù lao)
+
+# Principal permissions (All permissions)
+full_system_access | Toàn quyền truy cập hệ thống
+view_all_reports | Xem mọi báo cáo
+manage_all_users | Quản lý mọi người dùng
+approve_all_requests | Phê duyệt mọi yêu cầu
+
+# Accountant permissions
+view_tuition_fees | Xem học phí
+manage_tuition_fees | Quản lý học phí
+view_financial_reports | Xem báo cáo tài chính
+manage_payments | Quản lý thanh toán
+approve_tuition_postponement | Phê duyệt hoãn học phí
+manage_scholarships | Quản lý học bổng
+export_financial_data | Xuất dữ liệu tài chính
+
+# Academic permissions
+manage_subjects | Quản lý môn học
+manage_curriculum | Quản lý chương trình đào tạo
+manage_courses | Quản lý khóa học
+manage_semesters | Quản lý học kỳ
+manage_exams | Quản lý kỳ thi
+approve_exam_submissions | Phê duyệt đề thi
+manage_class_schedule | Quản lý lịch học
+assign_instructors | Phân công giảng viên
+view_academic_reports | Xem báo cáo đào tạo
+
+# HR permissions
+view_student_profiles | Xem hồ sơ sinh viên
+edit_student_profiles | Sửa hồ sơ sinh viên
+delete_student_profiles | Xóa hồ sơ sinh viên
+view_instructor_profiles | Xem hồ sơ giảng viên
+edit_instructor_profiles | Sửa hồ sơ giảng viên
+delete_instructor_profiles | Xóa hồ sơ giảng viên
+manage_user_accounts | Quản lý tài khoản người dùng
+view_hr_reports | Xem báo cáo nhân sự
+
+# Facilities permissions
+manage_buildings | Quản lý tòa nhà
+manage_rooms | Quản lý phòng học
+manage_room_amenities | Quản lý trang thiết bị
+approve_room_bookings | Phê duyệt đặt phòng
+view_facilities_reports | Xem báo cáo cơ sở vật chất
+manage_maintenance | Quản lý bảo trì
+
+# ============================================================
+# ROLE PERMISSIONS MAPPING
+# ============================================================
+[role_permissions]
+# Format: RoleName | Permission1, Permission2, Permission3, ...
+
+Student | login_system, register_courses, view_own_grades, pay_tuition, view_own_schedule, view_course_materials, request_documents
+
+Instructor | login_system, input_grades, view_student_list, view_teaching_schedule, upload_course_materials, submit_exam, manage_attendance, receive_payment
+
+Admin_Principal | full_system_access, view_all_reports, manage_all_users, approve_all_requests, login_system, view_tuition_fees, manage_tuition_fees, view_financial_reports, manage_payments, approve_tuition_postponement, manage_scholarships, export_financial_data, manage_subjects, manage_curriculum, manage_courses, manage_semesters, manage_exams, approve_exam_submissions, manage_class_schedule, assign_instructors, view_academic_reports, view_student_profiles, edit_student_profiles, delete_student_profiles, view_instructor_profiles, edit_instructor_profiles, delete_instructor_profiles, manage_user_accounts, view_hr_reports, manage_buildings, manage_rooms, manage_room_amenities, approve_room_bookings, view_facilities_reports, manage_maintenance
+
+Admin_Accountant | login_system, view_tuition_fees, manage_tuition_fees, view_financial_reports, manage_payments, approve_tuition_postponement, manage_scholarships, export_financial_data
+
+Admin_Academic | login_system, manage_subjects, manage_curriculum, manage_courses, manage_semesters, manage_exams, approve_exam_submissions, manage_class_schedule, assign_instructors, view_academic_reports
+
+Admin_HR | login_system, view_student_profiles, edit_student_profiles, delete_student_profiles, view_instructor_profiles, edit_instructor_profiles, delete_instructor_profiles, manage_user_accounts, view_hr_reports
+
+Admin_Facilities | login_system, manage_buildings, manage_rooms, manage_room_amenities, approve_room_bookings, view_facilities_reports, manage_maintenance
 
 # ============================================================
 # ACADEMIC YEARS
@@ -215,7 +371,7 @@ students_per_class: 30
 # ============================================================
 [staff]
 regular_instructors: 12
-regular_admins: 2
+# No regular admins - only 5 fixed admin accounts
 
 # ============================================================
 # BUILDINGS & ROOMS

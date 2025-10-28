@@ -340,34 +340,100 @@ class SQLDataGenerator:
             self.add_statement("-- WARNING: No regulations to insert!")
 
     # ==================== PERMISSIONS ====================
-    def create_permissions(self):
+    def create_roles_and_permissions(self):
+        """
+        Create roles, permissions, and role_permission mappings based on spec file
+        """
+        self.add_statement("\n-- ==================== ROLES ====================")
+        
+        role_rows = []
+        permission_rows = []
+        role_permission_rows = []
+        
+        # Track role IDs for later use
+        role_id_map = {}
+        permission_id_map = {}
+        
+        # =========================================================================
+        # 1. CREATE ROLES
+        # =========================================================================
+        for line in self.spec_data.get('roles', []):
+            parts = [p.strip() for p in line.split('|')]
+            if len(parts) < 2:
+                continue
+            
+            role_name, description = parts[0], parts[1]
+            role_id = self.generate_uuid()
+            
+            role_id_map[role_name] = role_id
+            
+            role_rows.append([role_id, role_name, description])
+            
+            self.add_statement(f"-- Role: {role_name}")
+        
+        self.bulk_insert('role', ['role_id', 'role_name', 'description'], role_rows)
+        
+        # =========================================================================
+        # 2. CREATE PERMISSIONS
+        # =========================================================================
         self.add_statement("\n-- ==================== PERMISSIONS ====================")
         
-        permissions_data = [
-            ('Admin', 'admin_manage_users', 'Quản lý người dùng'),
-            ('Admin', 'admin_manage_courses', 'Quản lý khóa học'),
-            ('Admin', 'admin_manage_rooms', 'Quản lý phòng học'),
-            ('Admin', 'admin_manage_students', 'Quản lý sinh viên'),
-            ('Admin', 'admin_manage_instructors', 'Quản lý giảng viên'),
-            ('Admin', 'admin_view_all_grades', 'Xem tất cả điểm'),
-            ('Instructor', 'instructor_view_schedule', 'Xem lịch giảng dạy'),
-            ('Instructor', 'instructor_edit_grades', 'Chỉnh sửa điểm'),
-            ('Instructor', 'instructor_view_student_list', 'Xem danh sách sinh viên'),
-            ('Instructor', 'instructor_upload_materials', 'Upload tài liệu'),
-            ('Student', 'student_view_schedule', 'Xem lịch học'),
-            ('Student', 'student_view_grades', 'Xem điểm'),
-            ('Student', 'student_register_courses', 'Đăng ký học phần'),
-            ('Student', 'student_view_materials', 'Xem tài liệu học tập'),
-        ]
+        for line in self.spec_data.get('permissions', []):
+            parts = [p.strip() for p in line.split('|')]
+            if len(parts) < 2:
+                continue
+            
+            permission_name, permission_description = parts[0], parts[1]
+            permission_id = self.generate_uuid()
+            
+            permission_id_map[permission_name] = permission_id
+            
+            permission_rows.append([permission_id, permission_name, permission_description])
         
-        rows = []
-        for role_name, perm_name, desc in permissions_data:
-            perm_id = self.generate_uuid()
-            self.data['permissions'].append({'permission_id': perm_id, 'role_name': role_name})
-            rows.append([perm_id, role_name, perm_name, desc])
+        self.bulk_insert('permission', 
+                        ['permission_id', 'permission_name', 'permission_description'], 
+                        permission_rows)
         
-        self.bulk_insert('permission', ['permission_id', 'role_name', 'permission_name', 'description'], rows)
-    
+        # =========================================================================
+        # 3. CREATE ROLE_PERMISSION MAPPINGS
+        # =========================================================================
+        self.add_statement("\n-- ==================== ROLE PERMISSIONS MAPPING ====================")
+        
+        for line in self.spec_data.get('role_permissions', []):
+            parts = [p.strip() for p in line.split('|')]
+            if len(parts) < 2:
+                continue
+            
+            role_name = parts[0]
+            permission_names = [p.strip() for p in parts[1].split(',')]
+            
+            role_id = role_id_map.get(role_name)
+            if not role_id:
+                self.add_statement(f"-- WARNING: Role not found: {role_name}")
+                continue
+            
+            for permission_name in permission_names:
+                permission_id = permission_id_map.get(permission_name)
+                if not permission_id:
+                    self.add_statement(f"-- WARNING: Permission not found: {permission_name}")
+                    continue
+                
+                role_permission_id = self.generate_uuid()
+                role_permission_rows.append([role_permission_id, role_id, permission_id, True])
+            
+            self.add_statement(f"-- Mapped {len(permission_names)} permissions to {role_name}")
+        
+        self.bulk_insert('role_permission',
+                        ['role_permission_id', 'role_id', 'permission_id', 'is_active'],
+                        role_permission_rows)
+        
+        self.add_statement(f"\n-- Total roles: {len(role_rows)}")
+        self.add_statement(f"-- Total permissions: {len(permission_rows)}")
+        self.add_statement(f"-- Total role-permission mappings: {len(role_permission_rows)}")
+        
+        # Store role_id_map for later use
+        self.role_id_map = role_id_map
+
     def create_fixed_test_accounts(self):
         self.add_statement("\n-- ==================== FIXED TEST ACCOUNTS ====================")
         
@@ -386,94 +452,203 @@ class SQLDataGenerator:
         instructor_rows = []
         admin_rows = []
         
+        # Get role IDs
+        student_role_id = self.role_id_map.get('Student')
+        instructor_role_id = self.role_id_map.get('Instructor')
+        
         # ============================================================
-        # INSTRUCTOR - Simple IDs
+        # STUDENT ACCOUNT
         # ============================================================
-        person_id = self.test_config.get('instructor_person_id', '00000000-0000-0000-0000-000000000011')
-        user_id = self.test_config.get('instructor_user_id', '00000000-0000-0000-0000-000000000012')
-        instructor_id = self.test_config.get('instructor_id', '00000000-0000-0000-0000-000000000013')
+        person_id = self.test_config.get('student_person_id')
+        user_id = self.test_config.get('student_user_id')
+        student_id = self.test_config.get('student_id')
+        
+        profile_pic = self.media_scanner.get_random_file('profile_pics')
+        profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+        
+        person_rows.append([
+            person_id, 
+            self.test_config.get('student_name'),
+            self.test_config.get('student_dob'),
+            self.test_config.get('student_gender'),
+            self.test_config.get('student_email'),
+            self.test_config.get('student_phone'),
+            f"{random.randint(100000000000, 999999999999)}",
+            'TP Hồ Chí Minh',
+            profile_pic_url
+        ])
+        
+        user_rows.append([
+            user_id, 
+            person_id, 
+            self.test_config.get('student_username'),
+            password_hash, 
+            salt_b64, 
+            student_role_id,
+            'active'
+        ])
+        
+        # Store for later use
+        self.data['fixed_accounts']['student'] = {
+            'person_id': person_id,
+            'user_id': user_id,
+            'student_id': student_id,
+            'class_id': None  # Will be set during class creation
+        }
+        
+        self.add_statement(f"-- STUDENT IDs: person={person_id}, user={user_id}, student={student_id}")
+        
+        # ============================================================
+        # INSTRUCTOR ACCOUNT
+        # ============================================================
+        person_id = self.test_config.get('instructor_person_id')
+        user_id = self.test_config.get('instructor_user_id')
+        instructor_id = self.test_config.get('instructor_id')
+        
+        profile_pic = self.media_scanner.get_random_file('profile_pics')
+        profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+        
+        person_rows.append([
+            person_id, 
+            self.test_config.get('instructor_name'),
+            self.test_config.get('instructor_dob'),
+            self.test_config.get('instructor_gender'),
+            self.test_config.get('instructor_email'),
+            self.test_config.get('instructor_phone'),
+            f"{random.randint(100000000000, 999999999999)}",
+            'TP Hồ Chí Minh',
+            profile_pic_url
+        ])
+        
+        user_rows.append([
+            user_id, 
+            person_id, 
+            self.test_config.get('instructor_username'),
+            password_hash, 
+            salt_b64, 
+            instructor_role_id,
+            'active'
+        ])
+        
+        instructor_rows.append([
+            instructor_id, 
+            person_id, 
+            self.test_config.get('instructor_code'),
+            self.test_config.get('instructor_degree'), 
+            self.test_config.get('instructor_specialization'),
+            None,  # department_id
+            self.test_config.get('instructor_hire_date'), 
+            'active'
+        ])
+        
+        self.data['instructors'].append({
+            'instructor_id': instructor_id, 
+            'person_id': person_id,
+            'full_name': self.test_config.get('instructor_name')
+        })
         
         self.data['fixed_accounts']['instructor'] = {
             'person_id': person_id,
             'user_id': user_id,
             'instructor_id': instructor_id,
-            'full_name': self.test_config.get('instructor_name', 'Test Instructor')
+            'full_name': self.test_config.get('instructor_name')
         }
-        
-        instructor_citizen_id = f"{random.randint(100000000000, 999999999999)}"
-        
-        # Get random profile picture
-        profile_pic = self.media_scanner.get_random_file('profile_pics')
-        profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
-        
-        person_rows.append([person_id, self.test_config.get('instructor_name'), 
-                        self.test_config.get('instructor_dob', '1985-01-01'),
-                        self.test_config.get('instructor_gender', 'female'),
-                        self.test_config.get('instructor_email'),
-                        self.test_config.get('instructor_phone'),
-                        instructor_citizen_id,
-                        'TP Hồ Chí Minh',
-                        profile_pic_url])
-        
-        user_rows.append([user_id, person_id, self.test_config.get('instructor_username'),
-                        password_hash, salt_b64, 'Instructor', 'active'])
-        
-        instructor_rows.append([instructor_id, person_id, self.test_config.get('instructor_code'),
-                            self.test_config.get('instructor_degree'), 
-                            self.test_config.get('instructor_specialization', 'Công nghệ thông tin'),
-                            None,  # department_id
-                            self.test_config.get('instructor_hire_date'), 'active'])
-        
-        self.data['instructors'].append({'instructor_id': instructor_id, 'person_id': person_id,
-                                        'full_name': self.test_config.get('instructor_name')})
         
         self.add_statement(f"-- INSTRUCTOR IDs: person={person_id}, user={user_id}, instructor={instructor_id}")
         
         # ============================================================
-        # ADMIN - Simple IDs
+        # ADMIN ACCOUNTS (5 types)
         # ============================================================
-        person_id = self.test_config.get('admin_person_id', '00000000-0000-0000-0000-000000000021')
-        user_id = self.test_config.get('admin_user_id', '00000000-0000-0000-0000-000000000022')
-        admin_id = self.test_config.get('admin_id', '00000000-0000-0000-0000-000000000023')
+        admin_types = [
+            ('principal', 'Admin_Principal'),
+            ('accountant', 'Admin_Accountant'),
+            ('academic', 'Admin_Academic'),
+            ('hr', 'Admin_HR'),
+            ('facilities', 'Admin_Facilities')
+        ]
         
-        self.data['fixed_accounts']['admin'] = {
-            'person_id': person_id, 
-            'user_id': user_id, 
-            'admin_id': admin_id
-        }
+        for admin_type, role_name in admin_types:
+            person_id = self.test_config.get(f'{admin_type}_person_id')
+            user_id = self.test_config.get(f'{admin_type}_user_id')
+            admin_id = self.test_config.get(f'{admin_type}_admin_id')
+            
+            role_id = self.role_id_map.get(role_name)
+            
+            profile_pic = self.media_scanner.get_random_file('profile_pics')
+            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+            
+            person_rows.append([
+                person_id,
+                self.test_config.get(f'{admin_type}_name'),
+                self.test_config.get(f'{admin_type}_dob'),
+                self.test_config.get(f'{admin_type}_gender'),
+                self.test_config.get(f'{admin_type}_email'),
+                self.test_config.get(f'{admin_type}_phone'),
+                f"{random.randint(100000000000, 999999999999)}",
+                'TP Hồ Chí Minh',
+                profile_pic_url
+            ])
+            
+            user_rows.append([
+                user_id, 
+                person_id, 
+                self.test_config.get(f'{admin_type}_username'),
+                password_hash, 
+                salt_b64, 
+                role_id,
+                'active'
+            ])
+            
+            admin_rows.append([
+                admin_id, 
+                person_id, 
+                self.test_config.get(f'{admin_type}_code'), 
+                self.test_config.get(f'{admin_type}_position'), 
+                'active'
+            ])
+            
+            self.data['admins'].append({
+                'admin_id': admin_id, 
+                'person_id': person_id,
+                'admin_type': admin_type,
+                'role_name': role_name
+            })
+            
+            # Store principal as default admin for references
+            if admin_type == 'principal':
+                self.data['fixed_accounts']['admin'] = {
+                    'person_id': person_id,
+                    'user_id': user_id,
+                    'admin_id': admin_id
+                }
+            
+            self.add_statement(f"-- {role_name.upper()} IDs: person={person_id}, user={user_id}, admin={admin_id}")
         
-        admin_citizen_id = f"{random.randint(100000000000, 999999999999)}"
+        # Insert all fixed accounts
+        self.bulk_insert('person', 
+                        ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 
+                        'phone_number', 'citizen_id', 'address', 'profile_picture'], 
+                        person_rows)
         
-        # Get random profile picture
-        profile_pic = self.media_scanner.get_random_file('profile_pics')
-        profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+        self.bulk_insert('user_account', 
+                        ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 
+                        'role_id', 'account_status'], 
+                        user_rows)
         
-        person_rows.append([person_id, self.test_config.get('admin_name'),
-                        self.test_config.get('admin_dob'),
-                        self.test_config.get('admin_gender'),
-                        self.test_config.get('admin_email'),
-                        self.test_config.get('admin_phone'),
-                        admin_citizen_id,
-                        'TP Hồ Chí Minh',
-                        profile_pic_url])
+        if instructor_rows:
+            self.bulk_insert('instructor', 
+                            ['instructor_id', 'person_id', 'instructor_code', 'degree', 
+                            'specialization', 'department_id', 'hire_date', 'employment_status'], 
+                            instructor_rows)
         
-        user_rows.append([user_id, person_id, self.test_config.get('admin_username'),
-                        password_hash, salt_b64, 'Admin', 'active'])
-        
-        admin_rows.append([admin_id, person_id, self.test_config.get('admin_code'), self.test_config.get('admin_position'), 'active'])
-
-        self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
-        
-        self.add_statement(f"-- ADMIN IDs: person={person_id}, user={user_id}, admin={admin_id}")
-        
-        # Insert all fixed accounts - FIXED: profile_picture instead of profile_picture_url
-        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture'], person_rows)
-        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
-        self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
-        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)
+        if admin_rows:
+            self.bulk_insert('admin', 
+                            ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], 
+                            admin_rows)
 
     def create_regular_staff(self):
-        self.add_statement("\n-- ==================== REGULAR INSTRUCTORS & ADMINS ====================")
+        self.add_statement("\n-- ==================== REGULAR INSTRUCTORS ====================")
+        self.add_statement("-- NOTE: Only 5 fixed admin accounts exist (no regular admins)")
         
         first_names = self.names_config.get('first_names', '').split(', ')
         middle_names = self.names_config.get('middle_names', '').split(', ')
@@ -483,9 +658,10 @@ class SQLDataGenerator:
         person_rows = []
         user_rows = []
         instructor_rows = []
-        admin_rows = []
         
-        # Instructors
+        instructor_role_id = self.role_id_map.get('Instructor')
+        
+        # Instructors only
         num_instructors = int(self.staff_config.get('regular_instructors', 12))
         for i in range(num_instructors):
             gender = random.choice(['male', 'female'])
@@ -499,55 +675,45 @@ class SQLDataGenerator:
             
             citizen_id = f"{random.randint(100000000000, 999999999999)}"
             
-            # Get random profile picture
             profile_pic = self.media_scanner.get_random_file('profile_pics')
             profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
             
-            person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 'TP Hồ Chí Minh', profile_pic_url])
+            person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 
+                            'TP Hồ Chí Minh', profile_pic_url])
             
             user_id = self.generate_uuid()
             username = f"gv{i+1:02d}"
-            user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Instructor', 'active'])
+            user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 
+                            instructor_role_id, 'active'])
             
             instructor_id = self.generate_uuid()
             degree = random.choice(['Tiến sĩ', 'Thạc sĩ', 'Cử nhân'])
             specialization = random.choice(['Công nghệ thông tin', 'Kinh tế', 'Kỹ thuật', 'Khoa học'])
             hire_date = date(random.randint(2010, 2020), random.randint(1, 12), 1)
-            instructor_rows.append([instructor_id, person_id, f"GV{i+1:04d}", degree, specialization, None, hire_date, 'active'])
+            instructor_rows.append([instructor_id, person_id, f"GV{i+1:04d}", degree, 
+                                specialization, None, hire_date, 'active'])
             
-            self.data['instructors'].append({'instructor_id': instructor_id, 'person_id': person_id, 'full_name': full_name})
+            self.data['instructors'].append({
+                'instructor_id': instructor_id, 
+                'person_id': person_id, 
+                'full_name': full_name
+            })
         
-        # Admins
-        num_admins = int(self.staff_config.get('regular_admins', 2))
-        for i in range(num_admins):
-            person_id = self.generate_uuid()
-            full_name = f"{random.choice(first_names)} {random.choice(middle_names)} {random.choice(last_names_male)}"
-            email = f"admin{i+1}@edu.vn"
-            phone = f"0{random.randint(300000000, 999999999)}"
-            
-            citizen_id = f"{random.randint(100000000000, 999999999999)}"
-            
-            # Get random profile picture
-            profile_pic = self.media_scanner.get_random_file('profile_pics')
-            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
-            
-            person_rows.append([person_id, full_name, date(1975, 1, 1), 'male', email, phone, citizen_id, 'TP Hồ Chí Minh', profile_pic_url])
-            
-            user_id = self.generate_uuid()
-            username = f"admin{i+1}"
-            user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Admin', 'active'])
-            
-            admin_id = self.generate_uuid()
-            admin_rows.append([admin_id, person_id, f"AD{i+1:04d}", 'Quản trị viên', 'active'])
-            
-            self.data['admins'].append({'admin_id': admin_id, 'person_id': person_id})
+        self.bulk_insert('person', 
+                        ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 
+                        'phone_number', 'citizen_id', 'address', 'profile_picture'], 
+                        person_rows)
         
-        # FIXED: profile_picture instead of profile_picture_url
-        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture'], person_rows)
-        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
-        self.bulk_insert('instructor', ['instructor_id', 'person_id', 'instructor_code', 'degree', 'specialization', 'department_id', 'hire_date', 'employment_status'], instructor_rows)
-        self.bulk_insert('admin', ['admin_id', 'person_id', 'admin_code', 'position', 'admin_status'], admin_rows)    
-    
+        self.bulk_insert('user_account', 
+                        ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 
+                        'role_id', 'account_status'], 
+                        user_rows)
+        
+        self.bulk_insert('instructor', 
+                        ['instructor_id', 'person_id', 'instructor_code', 'degree', 
+                        'specialization', 'department_id', 'hire_date', 'employment_status'], 
+                        instructor_rows)
+
     def create_faculties_and_departments(self):
         self.add_statement("\n-- ==================== FACULTIES & DEPARTMENTS ====================")
         
@@ -1361,9 +1527,11 @@ class SQLDataGenerator:
                 self.add_statement(f"-- WARNING: {cls['class_code']} missing subjects: {', '.join(missing_codes)}")
             
             self.add_statement(f"-- {cls['class_code']}: {len(curriculum_subjects)} subjects mapped")
-    
+
     def create_students(self):
         self.add_statement("\n-- ==================== STUDENTS ====================")
+        self.add_statement("-- NOTE: Fixed STUDENT account already created in create_fixed_test_accounts()")
+        self.add_statement("-- Only creating regular students here")
         
         first_names = self.names_config.get('first_names', '').split(', ')
         middle_names = self.names_config.get('middle_names', '').split(', ')
@@ -1377,53 +1545,35 @@ class SQLDataGenerator:
         user_rows = []
         student_rows = []
         
-        # Fixed STUDENT account - Simple IDs
-        password = self.test_config.get('password')
-        salt_b64 = self.test_config.get('salt_base64')
-        salt_bytes = base64.b64decode(salt_b64)
-        password_hash = self.create_password_hash(password, salt_bytes)
+        # Get Student role ID
+        student_role_id = self.role_id_map.get('Student')
         
+        if not student_role_id:
+            self.add_statement("-- ERROR: Student role not found! Cannot create students.")
+            return
+        
+        # Find target class for fixed student and update metadata only
         target_class_year = int(self.test_config.get('student_class_year', 2023))
         target_class = next((c for c in self.data['classes'] if c['start_year'] == target_class_year), None)
         
         if target_class:
-            person_id = self.test_config.get('student_person_id', '00000000-0000-0000-0000-000000000001')
-            user_id = self.test_config.get('student_user_id', '00000000-0000-0000-0000-000000000002')
             student_id = self.test_config.get('student_id', '00000000-0000-0000-0000-000000000003')
+            person_id = self.data['fixed_accounts']['student']['person_id']
             
-            self.data['fixed_accounts']['student'] = {
-                'person_id': person_id,
-                'user_id': user_id,
-                'student_id': student_id,
-                'class_id': target_class['class_id'],
-                'class_start_year': target_class_year
-            }
+            # Update fixed account with class info (person/user already created)
+            self.data['fixed_accounts']['student']['class_id'] = target_class['class_id']
+            self.data['fixed_accounts']['student']['class_start_year'] = target_class_year
             
-            fixed_student_citizen_id = f"{random.randint(100000000000, 999999999999)}"
+            # ONLY insert student record (person/user already exist from create_fixed_test_accounts)
+            student_rows.append([
+                student_id, 
+                person_id, 
+                self.test_config.get('student_code'),
+                target_class['class_id'], 
+                'active'
+            ])
             
-            # Get random profile picture for fixed student
-            profile_pic = self.media_scanner.get_random_file('profile_pics')
-
-            if not profile_pic:
-                raise FileNotFoundError('fuck')
-
-            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
-            
-            person_rows.append([person_id, self.test_config.get('student_name'),
-                            self.test_config.get('student_dob'),
-                            self.test_config.get('student_gender'),
-                            self.test_config.get('student_email'),
-                            self.test_config.get('student_phone'),
-                            fixed_student_citizen_id,
-                            'TP Hồ Chí Minh',
-                            profile_pic_url])
-            
-            user_rows.append([user_id, person_id, self.test_config.get('student_username'),
-                            password_hash, salt_b64, 'Student', 'active'])
-            
-            student_rows.append([student_id, person_id, self.test_config.get('student_code'),
-                                target_class['class_id'], 'active'])
-            
+            # Add to students list
             self.data['students'].append({
                 'student_id': student_id,
                 'person_id': person_id,
@@ -1433,8 +1583,9 @@ class SQLDataGenerator:
                 'is_fixed': True
             })
             
-            self.add_statement(f"-- Fixed STUDENT: {self.test_config.get('student_username')}")
-            self.add_statement(f"-- STUDENT IDs: person={person_id}, user={user_id}, student={student_id}")
+            self.add_statement(f"-- Fixed STUDENT assigned to class: {target_class['class_name']} (year {target_class_year})")
+        else:
+            self.add_statement(f"-- WARNING: Could not find class for year {target_class_year}, skipping fixed student")
         
         # Regular students
         for cls in self.data['classes']:
@@ -1455,15 +1606,39 @@ class SQLDataGenerator:
                 profile_pic = self.media_scanner.get_random_file('profile_pics')
                 profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
                 
-                person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 'TP Hồ Chí Minh', profile_pic_url])
+                person_rows.append([
+                    person_id, 
+                    full_name, 
+                    dob, 
+                    gender, 
+                    email, 
+                    phone, 
+                    citizen_id, 
+                    'TP Hồ Chí Minh', 
+                    profile_pic_url
+                ])
                 
                 user_id = self.generate_uuid()
                 username = f"sv{global_counter:05d}"
-                user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 'Student', 'active'])
+                user_rows.append([
+                    user_id, 
+                    person_id, 
+                    username, 
+                    'hashed_pwd', 
+                    'salt', 
+                    student_role_id, 
+                    'active'
+                ])
                 
                 student_id = self.generate_uuid()
                 student_code = f"SV{global_counter:06d}"
-                student_rows.append([student_id, person_id, student_code, cls['class_id'], 'active'])
+                student_rows.append([
+                    student_id, 
+                    person_id, 
+                    student_code, 
+                    cls['class_id'], 
+                    'active'
+                ])
                 
                 self.data['students'].append({
                     'student_id': student_id,
@@ -1476,10 +1651,28 @@ class SQLDataGenerator:
                 
                 global_counter += 1
         
-        # FIXED: profile_picture instead of profile_picture_url
-        self.bulk_insert('person', ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 'phone_number', 'citizen_id', 'address', 'profile_picture'], person_rows)
-        self.bulk_insert('user_account', ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 'role_name', 'account_status'], user_rows)
-        self.bulk_insert('student', ['student_id', 'person_id', 'student_code', 'class_id', 'enrollment_status'], student_rows)
+        self.add_statement(f"-- Total students to create: {len(student_rows)}")
+        self.add_statement(f"-- Fixed student: 1 (student record only)")
+        self.add_statement(f"-- Regular students: {len(student_rows) - 1}")
+        
+        # Insert person/user ONLY for regular students (fixed student already has these)
+        if person_rows:
+            self.bulk_insert('person', 
+                            ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 
+                            'phone_number', 'citizen_id', 'address', 'profile_picture'], 
+                            person_rows)
+        
+        if user_rows:
+            self.bulk_insert('user_account', 
+                            ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 
+                            'role_id', 'account_status'], 
+                            user_rows)
+        
+        # Insert ALL student records (fixed + regular)
+        if student_rows:
+            self.bulk_insert('student', 
+                            ['student_id', 'person_id', 'student_code', 'class_id', 'enrollment_status'], 
+                            student_rows)
 
     def create_buildings_and_rooms(self):
         self.add_statement("\n-- ==================== BUILDINGS & ROOMS ====================")
@@ -2949,7 +3142,8 @@ class SQLDataGenerator:
     # ==================== MAIN GENERATION ====================
     def generate_all(self):
         """
-        UPDATED: Main generation with new functions
+        COMPLETE MAIN GENERATION FUNCTION WITH NEW 7-ROLE SYSTEM
+        Generates all data in correct dependency order
         """
         print("Generating SQL data from spec file...")
         
@@ -2957,56 +3151,162 @@ class SQLDataGenerator:
         self.add_statement("-- EDUMANAGEMENT DATABASE - COMPLETE SCHEMA GENERATION")
         self.add_statement(f"-- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.add_statement(f"-- Spec file: {self.spec_file}")
-        self.add_statement("-- UPDATED FOR COMPLETE NEW SCHEMA")
+        self.add_statement("-- ============================================================")
+        self.add_statement("-- FEATURES:")
+        self.add_statement("--   - 7-ROLE SYSTEM: Student, Instructor, 5 Admin types")
+        self.add_statement("--   - Student: 1 role with course registration permissions")
+        self.add_statement("--   - Instructor: 1 role with grading/teaching permissions")
+        self.add_statement("--   - Admin_Principal: Full system access (Hiệu trưởng)")
+        self.add_statement("--   - Admin_Accountant: Financial management (Kế toán)")
+        self.add_statement("--   - Admin_Academic: Academic management (Đào tạo)")
+        self.add_statement("--   - Admin_HR: Human resources (Nhân sự)")
+        self.add_statement("--   - Admin_Facilities: Facilities management (Cơ sở vật chất)")
+        self.add_statement("--   - 5 fixed admin test accounts (one for each admin type)")
+        self.add_statement("--   - Role-based permission system with granular access control")
         self.add_statement("-- ============================================================")
         self.add_statement("USE EduManagement;")
         self.add_statement("GO\n")
         
-        # Core entities
-        self.create_permissions()
+        # =========================================================================
+        # PHASE 1: ROLES & PERMISSIONS (MUST BE FIRST)
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 1: ROLES & PERMISSIONS")
+        self.add_statement("-- =========================================================================")
+        
+        self.create_roles_and_permissions()
+        
+        # =========================================================================
+        # PHASE 2: PEOPLE & ACCOUNTS
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 2: PEOPLE & ACCOUNTS")
+        self.add_statement("-- =========================================================================")
+        
         self.create_fixed_test_accounts()
         self.create_regular_staff()
+        
+        # =========================================================================
+        # PHASE 3: ORGANIZATIONAL STRUCTURE
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 3: ORGANIZATIONAL STRUCTURE")
+        self.add_statement("-- =========================================================================")
+        
         self.create_faculties_and_departments()
         self.create_academic_years_and_semesters()
+        
+        # =========================================================================
+        # PHASE 4: PHYSICAL INFRASTRUCTURE
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 4: PHYSICAL INFRASTRUCTURE")
+        self.add_statement("-- =========================================================================")
+        
         self.create_buildings_and_rooms()
         self.create_room_amenities()
         self.create_room_amenity_mappings()
         
-        # Academic structure
+        # =========================================================================
+        # PHASE 5: ACADEMIC PROGRAMS
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 5: ACADEMIC PROGRAMS")
+        self.add_statement("-- =========================================================================")
+        
         self.create_classes()
         self.create_subjects()
         self.map_class_curricula()
-        self.create_curriculum_details()  # UPDATED
+        self.create_curriculum_details()
         self.create_students()
         
-        # Course management
+        # =========================================================================
+        # PHASE 6: COURSE OFFERINGS
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 6: COURSE OFFERINGS")
+        self.add_statement("-- =========================================================================")
+        
         self.create_courses()
         self.create_course_classes()
         self.create_student_enrollments()
-        self.create_documents() 
+        self.create_documents()
         
-        # Exams and assessments
-        self.create_exams_and_exam_entries()  # NEW/UPDATED
+        # =========================================================================
+        # PHASE 7: ASSESSMENTS
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 7: ASSESSMENTS")
+        self.add_statement("-- =========================================================================")
         
-        # Additional features
-        self.create_student_health_insurance()  # NEW
-        self.create_payments()  # NEW
-        self.create_schedule_changes()  # NEW
-        self.create_notifications()  # NEW
-
-        # Regulations
+        self.create_exams_and_exam_entries()
+        
+        # =========================================================================
+        # PHASE 8: FINANCIAL & SUPPORT SERVICES
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 8: FINANCIAL & SUPPORT SERVICES")
+        self.add_statement("-- =========================================================================")
+        
+        self.create_student_health_insurance()
+        self.create_payments()
+        
+        # =========================================================================
+        # PHASE 9: OPERATIONAL MANAGEMENT
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 9: OPERATIONAL MANAGEMENT")
+        self.add_statement("-- =========================================================================")
+        
+        self.create_schedule_changes()
+        self.create_notifications()
+        
+        # =========================================================================
+        # PHASE 10: REGULATIONS & POLICIES
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 10: REGULATIONS & POLICIES")
+        self.add_statement("-- =========================================================================")
+        
         self.create_regulations()
         
+        # =========================================================================
+        # FINAL STATISTICS
+        # =========================================================================
         self.add_statement("\n-- ============================================================")
-        self.add_statement("-- GENERATION COMPLETE - STATISTICS")
+        self.add_statement("-- GENERATION COMPLETE - FINAL STATISTICS")
         self.add_statement("-- ============================================================")
+        self.add_statement(f"-- Roles: 7 (Student, Instructor, 5 Admin types)")
+        self.add_statement(f"-- Permissions: {len(self.spec_data.get('permissions', []))}")
         self.add_statement(f"-- Students: {len(self.data['students'])}")
+        self.add_statement(f"--   - Fixed test account: 1")
+        self.add_statement(f"--   - Regular students: {len(self.data['students']) - 1}")
         self.add_statement(f"-- Instructors: {len(self.data['instructors'])}")
+        self.add_statement(f"--   - Fixed test account: 1")
+        self.add_statement(f"--   - Regular instructors: {len(self.data['instructors']) - 1}")
+        self.add_statement(f"-- Admins: {len(self.data['admins'])}")
+        self.add_statement(f"--   - Principal (Full access): 1")
+        self.add_statement(f"--   - Accountant (Financial): 1")
+        self.add_statement(f"--   - Academic Manager (Education): 1")
+        self.add_statement(f"--   - HR Manager (Personnel): 1")
+        self.add_statement(f"--   - Facilities Manager (Infrastructure): 1")
+        self.add_statement(f"-- Faculties: {len(self.data['faculties'])}")
+        self.add_statement(f"-- Departments: {len(self.data['departments'])}")
+        self.add_statement(f"-- Classes: {len(self.data['classes'])}")
+        self.add_statement(f"-- Subjects: {len(self.data['subjects'])}")
         self.add_statement(f"-- Courses: {len(self.data['courses'])}")
         self.add_statement(f"-- Course Classes: {len(self.data['course_classes'])}")
+        self.add_statement(f"-- Student Enrollments: {len(self.data.get('enrollments', []))}")
         self.add_statement(f"-- Buildings: {len(self.data['buildings'])}")
         self.add_statement(f"-- Rooms: {len(self.data['rooms'])}")
+        self.add_statement(f"-- Room Amenities: {len(self.data.get('amenities', []))}")
         self.add_statement(f"-- Regulations: {len(self.data['regulations'])}")
+        self.add_statement(f"-- Health Insurance Records: {len(self.data.get('insurances', []))}")
+        self.add_statement("-- ============================================================")
+        self.add_statement("-- READY FOR DEPLOYMENT!")
+        self.add_statement("-- All tables populated with realistic, relational data")
+        self.add_statement("-- Test accounts ready with predictable credentials")
+        self.add_statement("-- ============================================================")
         
         return '\n'.join(self.sql_statements)
 
