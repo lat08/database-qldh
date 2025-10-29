@@ -55,6 +55,7 @@ def create_fixed_test_accounts(self):
         password_hash, 
         salt_b64, 
         student_role_id,
+        'student',  # role_name (legacy)
         'active'
     ])
     
@@ -97,6 +98,7 @@ def create_fixed_test_accounts(self):
         password_hash, 
         salt_b64, 
         instructor_role_id,
+        'instructor',  # role_name (legacy)
         'active'
     ])
     
@@ -166,6 +168,7 @@ def create_fixed_test_accounts(self):
             password_hash, 
             salt_b64, 
             role_id,
+            'admin',  # role_name (legacy) - all admin types use 'admin'
             'active'
         ])
         
@@ -202,7 +205,7 @@ def create_fixed_test_accounts(self):
     
     self.bulk_insert('user_account', 
                     ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 
-                    'role_id', 'account_status'], 
+                    'role_id', 'role_name', 'account_status'], 
                     user_rows)
     
     if instructor_rows:
@@ -254,7 +257,7 @@ def create_regular_staff(self):
         user_id = self.generate_uuid()
         username = f"gv{i+1:02d}"
         user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 
-                        instructor_role_id, 'active'])
+                        instructor_role_id, 'instructor', 'active'])  # Added role_name
         
         instructor_id = self.generate_uuid()
         degree = random.choice(['Tiến sĩ', 'Thạc sĩ', 'Cử nhân'])
@@ -276,7 +279,7 @@ def create_regular_staff(self):
     
     self.bulk_insert('user_account', 
                     ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 
-                    'role_id', 'account_status'], 
+                    'role_id', 'role_name', 'account_status'], 
                     user_rows)
     
     self.bulk_insert('instructor', 
@@ -382,7 +385,8 @@ def create_students(self):
                 username, 
                 'hashed_pwd', 
                 'salt', 
-                student_role_id, 
+                student_role_id,
+                'student',  # role_name (legacy)
                 'active'
             ])
             
@@ -421,7 +425,7 @@ def create_students(self):
     if user_rows:
         self.bulk_insert('user_account', 
                         ['user_id', 'person_id', 'username', 'password_hash', 'password_salt', 
-                        'role_id', 'account_status'], 
+                        'role_id', 'role_name', 'account_status'], 
                         user_rows)
     
     # Insert ALL student records (fixed + regular)

@@ -128,26 +128,35 @@ def create_documents(self):
     
     self.add_statement(f"-- Found {len(pdf_files)} PDFs, {len(image_files)} images, {len(excel_files)} Excel files")
     
-    # Document type descriptions
+    # Document types (matching CHECK constraint)
+    document_types = ['Bài tập', 'Tài liệu', 'Slide', 'Bài LAB']
+    
+    # Document type descriptions mapped to document types
     descriptions = {
-        'pdf': [
+        'Bài tập': [
+            'Bài tập thực hành tuần',
+            'Bài tập ôn tập',
+            'Đề bài tập lớn',
+            'Bài tập làm thêm'
+        ],
+        'Tài liệu': [
             'Bài giảng lý thuyết',
             'Tài liệu tham khảo',
             'Đề cương môn học',
+            'Tài liệu ôn tập',
+            'Giáo trình môn học'
+        ],
+        'Slide': [
             'Slide bài giảng',
-            'Tài liệu ôn tập'
+            'Slide tổng quan',
+            'Slide minh họa',
+            'Slide thảo luận'
         ],
-        'image': [
-            'Hình ảnh minh họa',
-            'Sơ đồ tư duy',
-            'Biểu đồ phân tích',
-            'Ảnh thực hành'
-        ],
-        'excel': [
-            'Bảng dữ liệu mẫu',
-            'Điểm danh sinh viên',
-            'Kết quả thực hành',
-            'Bảng tính thống kê'
+        'Bài LAB': [
+            'Hướng dẫn thực hành',
+            'Bài LAB thực hành',
+            'Đề bài thí nghiệm',
+            'Mẫu báo cáo LAB'
         ]
     }
     
@@ -175,29 +184,28 @@ def create_documents(self):
         for i in range(num_docs):
             document_id = self.generate_uuid()
             
-            # Randomly select document type and file
-            doc_type = random.choice(['pdf', 'image', 'excel'])
+            # Randomly select document type
+            document_type = random.choice(document_types)
             
-            if doc_type == 'pdf' and pdf_files:
+            # Randomly select file type and file
+            file_category = random.choice(['pdf', 'image', 'excel'])
+            
+            if file_category == 'pdf' and pdf_files:
                 file_name = random.choice(pdf_files)
                 file_type = 'pdf'
-                desc_pool = descriptions['pdf']
-            elif doc_type == 'image' and image_files:
+            elif file_category == 'image' and image_files:
                 file_name = random.choice(image_files)
                 file_ext = file_name.split('.')[-1].lower()
                 file_type = file_ext if file_ext in ['jpg', 'jpeg', 'png'] else 'jpg'
-                desc_pool = descriptions['image']
-            elif doc_type == 'excel' and excel_files:
+            elif file_category == 'excel' and excel_files:
                 file_name = random.choice(excel_files)
                 file_ext = file_name.split('.')[-1].lower()
                 file_type = file_ext if file_ext in ['xlsx', 'xls'] else 'xlsx'
-                desc_pool = descriptions['excel']
             else:
                 # Fallback to PDF if preferred type not available
                 if pdf_files:
                     file_name = random.choice(pdf_files)
                     file_type = 'pdf'
-                    desc_pool = descriptions['pdf']
                 else:
                     continue
             
@@ -208,7 +216,8 @@ def create_documents(self):
             size_min, size_max = file_size_ranges.get(file_type, (100000, 5000000))
             file_size = random.randint(size_min, size_max)
             
-            # Random description
+            # Get description based on document type
+            desc_pool = descriptions[document_type]
             description = random.choice(desc_pool)
             
             # Uploaded by instructor
@@ -218,6 +227,7 @@ def create_documents(self):
                 document_id,
                 course_class['course_class_id'],
                 file_name,
+                document_type,
                 file_path,
                 file_type,
                 file_size,
@@ -228,10 +238,10 @@ def create_documents(self):
     self.add_statement(f"-- Total documents generated: {len(document_rows)}")
     
     self.bulk_insert('document',
-                    ['document_id', 'course_class_id', 'file_name', 'file_path',
-                    'file_type', 'file_size', 'uploaded_by', 'description'],
+                    ['document_id', 'course_class_id', 'file_name', 'document_type',
+                     'file_path', 'file_type', 'file_size', 'uploaded_by', 'description'],
                     document_rows)
-    
+
 def create_regulations(self):
     """
     Generate regulation records from spec file
