@@ -85,6 +85,7 @@ CREATE TABLE user_account (
     password_hash NVARCHAR(255) NOT NULL,
     password_salt NVARCHAR(255) NOT NULL,
     role_id UNIQUEIDENTIFIER NOT NULL,
+    role_name NVARCHAR(50) CHECK (role_name IN ('student', 'instructor', 'admin')), -- Legacy/Backward Compatible
     email_verified BIT DEFAULT 0,
     email_verification_code NVARCHAR(255),
     account_status NVARCHAR(20) NOT NULL DEFAULT 'active' CHECK (account_status IN ('active', 'inactive', 'suspended')),
@@ -589,6 +590,7 @@ CREATE TABLE document (
     document_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     course_class_id UNIQUEIDENTIFIER NOT NULL,
     file_name NVARCHAR(500) NOT NULL,
+	document_type NVARCHAR(20) NOT NULL CHECK (document_type IN (N'Bài tập', N'Tài liệu', N'Slide', N'Bài LAB')),
     file_path NVARCHAR(1000) NOT NULL,
     file_type NVARCHAR(20) CHECK (file_type IN ('pdf', 'docx', 'doc', 'pptx', 'ppt', 'xlsx', 'xls', 'jpg', 'jpeg', 'png', 'zip', 'rar')),
     file_size BIGINT CHECK (file_size > 0),
