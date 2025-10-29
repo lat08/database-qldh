@@ -842,6 +842,7 @@ CREATE TABLE room_booking (
     end_time TIME NOT NULL,
     booked_by UNIQUEIDENTIFIER NOT NULL,
     purpose NVARCHAR(500),
+    student_count INT NOT NULL DEFAULT 0,
     booking_status NVARCHAR(20) DEFAULT 'confirmed' CHECK (booking_status IN ('pending', 'confirmed', 'cancelled', 'completed')),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
