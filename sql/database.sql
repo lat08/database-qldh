@@ -625,6 +625,8 @@ CREATE TABLE notification_schedule (
     target_id UNIQUEIDENTIFIER NULL,
     created_by_user UNIQUEIDENTIFIER NOT NULL,
     status NVARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'cancelled')),
+    event_location NVARCHAR(100) NULL,
+    event_start_date DATETIME2 NULL,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -940,6 +942,9 @@ CREATE TABLE payment_postponement_request (
     )
 );
 
+-- ============================================================
+-- THEME CONFIGURATIONS
+-- ============================================================
 CREATE TABLE theme_configurations (
     theme_config_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     
@@ -950,19 +955,10 @@ CREATE TABLE theme_configurations (
     
     -- Scope (page/component specific)
     scope_type NVARCHAR(50) NOT NULL CHECK (scope_type IN ('global', 'page', 'component')),
-    scope_target NVARCHAR(200), -- e.g., 'student-dashboard', 'header', 'sidebar'
+    scope_target NVARCHAR(200) NOT NULL DEFAULT '', -- Dùng '' thay vì NULL
     
     -- Theme variables (JSON format)
     theme_variables NVARCHAR(MAX) NOT NULL,
-    -- Example: 
-    -- {
-    --   "primary": "#4E8EE1",
-    --   "primary_foreground": "#ffffff",
-    --   "secondary": "#f5f5f5",
-    --   "background": "#ffffff",
-    --   "sidebar": "#1a1a1a",
-    --   ...
-    -- }
     
     -- Standard audit fields
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
@@ -973,7 +969,6 @@ CREATE TABLE theme_configurations (
     is_active BIT NOT NULL DEFAULT 1,
     
     -- Constraints
-    CONSTRAINT UQ_theme_scope_active UNIQUE(scope_type, scope_target, is_active),
     CONSTRAINT FK_theme_created_by FOREIGN KEY (created_by_admin_id)
         REFERENCES dbo.admin(admin_id) ON DELETE NO ACTION,
     CONSTRAINT CHK_theme_name_not_empty CHECK (LEN(TRIM(theme_name)) > 0),
@@ -985,6 +980,11 @@ CREATE INDEX idx_theme_active ON theme_configurations(is_active) WHERE is_active
 CREATE INDEX idx_theme_scope ON theme_configurations(scope_type, scope_target);
 CREATE INDEX idx_theme_created_by ON theme_configurations(created_by_admin_id);
 
+-- Unique constraint: chỉ 1 theme active mỗi scope
+CREATE UNIQUE INDEX UQ_theme_scope_active 
+ON theme_configurations(scope_type, scope_target)
+WHERE is_active = 1 AND is_deleted = 0;
+
 -- ============================================================
 -- THEME HISTORY
 -- ============================================================
@@ -993,8 +993,8 @@ CREATE TABLE theme_history (
     theme_config_id UNIQUEIDENTIFIER NOT NULL,
     action NVARCHAR(50) NOT NULL CHECK (action IN ('created', 'updated', 'activated', 'deactivated', 'deleted')),
     changed_by_admin_id UNIQUEIDENTIFIER NOT NULL,
-    previous_values NVARCHAR(MAX), -- JSON string
-    new_values NVARCHAR(MAX), -- JSON string
+    previous_values NVARCHAR(MAX),
+    new_values NVARCHAR(MAX),
     change_reason NVARCHAR(500),
     
     -- Standard audit fields
@@ -1022,10 +1022,3 @@ CREATE INDEX idx_theme_history_config ON theme_history(theme_config_id);
 CREATE INDEX idx_theme_history_admin ON theme_history(changed_by_admin_id);
 CREATE INDEX idx_theme_history_action ON theme_history(action);
 CREATE INDEX idx_theme_history_created ON theme_history(created_at);
-
-CREATE TABLE payment_group (
-    id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-    student_course_ids NVARCHAR(MAX) NOT NULL,
-    created_at DATETIME NOT NULL,
-    status NVARCHAR(255) NOT NULL
-);

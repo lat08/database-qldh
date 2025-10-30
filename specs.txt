@@ -3,104 +3,142 @@
 # Lines starting with # are comments
 
 # ============================================================
-# FIXED TEST ACCOUNTS - SIMPLE PREDICTABLE IDs
+# FIXED TEST ACCOUNTS - Password Configuration
 # ============================================================
 [test_accounts]
 password: 123456
 salt_base64: MTExMQ==
 
-# STUDENT account - Simple IDs for easy testing
-student_person_id: 00000000-0000-0000-0000-000000000001
-student_user_id: 00000000-0000-0000-0000-000000000002
+# ============================================================
+# FIXED STUDENT ACCOUNT
+# ============================================================
+[test_student]
+person_id: 00000000-0000-0000-0000-000000000001
+user_id: 00000000-0000-0000-0000-000000000002
 student_id: 00000000-0000-0000-0000-000000000003
-student_username: STUDENT
-student_email: student.test@edu.vn
-student_name: Nguyễn Văn Test Student
+username: STUDENT
+email: student.test@edu.vn
+full_name: Nguyễn Văn Test Student
 student_code: SV999999
-student_gender: male
-student_dob: 2005-01-15
-student_phone: 0901234567
-student_class_year: 2023
+gender: male
+date_of_birth: 2005-01-15
+phone_number: 0901234567
+citizen_id: 001234567890
+address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
+class_year: 2023
 
-# INSTRUCTOR account - Simple IDs for easy testing
-instructor_person_id: 00000000-0000-0000-0000-000000000011
-instructor_user_id: 00000000-0000-0000-0000-000000000012
+[test_student]
+person_id: 00000000-0000-0000-0000-000000000999
+user_id: 00000000-0000-0000-0000-000000000999
+student_id: 00000000-0000-0000-0000-000000000999
+username: STUDENT
+email: tiensi.thien2005@gmail.com
+full_name: Phan Điền Mạnh Thiên
+student_code: SV001
+gender: male
+date_of_birth: 2005-01-15
+phone_number: 0901234999
+citizen_id: 000901234999
+address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
+class_year: 2023
+
+# ============================================================
+# FIXED INSTRUCTOR ACCOUNT
+# ============================================================
+[test_instructor]
+person_id: 00000000-0000-0000-0000-000000000011
+user_id: 00000000-0000-0000-0000-000000000012
 instructor_id: 00000000-0000-0000-0000-000000000013
-instructor_username: INSTRUCTOR
-instructor_email: instructor.test@edu.vn
-instructor_name: Trần Thị Test Instructor
+username: INSTRUCTOR
+email: instructor.test@edu.vn
+full_name: Trần Thị Test Instructor
 instructor_code: GV9999
-instructor_gender: female
-instructor_dob: 1985-03-20
-instructor_phone: 0907654321
-instructor_degree: Tiến sĩ
-instructor_specialization: Công nghệ thông tin
-instructor_hire_date: 2015-09-01
+gender: female
+date_of_birth: 1985-03-20
+phone_number: 0907654321
+citizen_id: 009876543210
+address: 456 Đường XYZ, Quận 3, TP Hồ Chí Minh
+degree: Tiến sĩ
+specialization: Công nghệ thông tin
+hire_date: 2015-09-01
 
-# ADMIN PRINCIPAL (Hiệu trưởng) - Full permissions
-principal_person_id: 00000000-0000-0000-0000-000000000021
-principal_user_id: 00000000-0000-0000-0000-000000000022
-principal_admin_id: 00000000-0000-0000-0000-000000000023
-principal_username: PRINCIPAL
-principal_email: principal.test@edu.vn
-principal_name: Lê Minh Test Principal
-principal_code: AD0001
-principal_gender: male
-principal_dob: 1975-01-10
-principal_phone: 0909111111
-principal_position: Hiệu trưởng
+# ============================================================
+# FIXED ADMIN ACCOUNTS
+# ============================================================
+[test_admin_principal]
+person_id: 00000000-0000-0000-0000-000000000021
+user_id: 00000000-0000-0000-0000-000000000022
+admin_id: 00000000-0000-0000-0000-000000000023
+username: PRINCIPAL
+email: principal.test@edu.vn
+full_name: Lê Minh Test Principal
+admin_code: AD0001
+gender: male
+date_of_birth: 1975-01-10
+phone_number: 0909111111
+citizen_id: 001111111111
+address: 789 Đường DEF, Quận 5, TP Hồ Chí Minh
+position: Hiệu trưởng
 
-# ADMIN ACCOUNTANT (Kế toán)
-accountant_person_id: 00000000-0000-0000-0000-000000000031
-accountant_user_id: 00000000-0000-0000-0000-000000000032
-accountant_admin_id: 00000000-0000-0000-0000-000000000033
-accountant_username: ACCOUNTANT
-accountant_email: accountant.test@edu.vn
-accountant_name: Phạm Thị Test Accountant
-accountant_code: AD0002
-accountant_gender: female
-accountant_dob: 1980-05-15
-accountant_phone: 0909222222
-accountant_position: Kế toán trưởng
+[test_admin_accountant]
+person_id: 00000000-0000-0000-0000-000000000031
+user_id: 00000000-0000-0000-0000-000000000032
+admin_id: 00000000-0000-0000-0000-000000000033
+username: ACCOUNTANT
+email: accountant.test@edu.vn
+full_name: Phạm Thị Test Accountant
+admin_code: AD0002
+gender: female
+date_of_birth: 1980-05-15
+phone_number: 0909222222
+citizen_id: 002222222222
+address: 321 Đường GHI, Quận 10, TP Hồ Chí Minh
+position: Kế toán trưởng
 
-# ADMIN ACADEMIC (Quản lý đào tạo)
-academic_person_id: 00000000-0000-0000-0000-000000000041
-academic_user_id: 00000000-0000-0000-0000-000000000042
-academic_admin_id: 00000000-0000-0000-0000-000000000043
-academic_username: ACADEMIC
-academic_email: academic.test@edu.vn
-academic_name: Trương Văn Test Academic
-academic_code: AD0003
-academic_gender: male
-academic_dob: 1978-08-20
-academic_phone: 0909333333
-academic_position: Trưởng phòng Đào tạo
+[test_admin_academic]
+person_id: 00000000-0000-0000-0000-000000000041
+user_id: 00000000-0000-0000-0000-000000000042
+admin_id: 00000000-0000-0000-0000-000000000043
+username: ACADEMIC
+email: academic.test@edu.vn
+full_name: Trương Văn Test Academic
+admin_code: AD0003
+gender: male
+date_of_birth: 1978-08-20
+phone_number: 0909333333
+citizen_id: 003333333333
+address: 654 Đường JKL, Quận Bình Thạnh, TP Hồ Chí Minh
+position: Trưởng phòng Đào tạo
 
-# ADMIN HR (Nhân sự)
-hr_person_id: 00000000-0000-0000-0000-000000000051
-hr_user_id: 00000000-0000-0000-0000-000000000052
-hr_admin_id: 00000000-0000-0000-0000-000000000053
-hr_username: HR
-hr_email: hr.test@edu.vn
-hr_name: Hoàng Thị Test HR
-hr_code: AD0004
-hr_gender: female
-hr_dob: 1982-11-25
-hr_phone: 0909444444
-hr_position: Trưởng phòng Nhân sự
+[test_admin_hr]
+person_id: 00000000-0000-0000-0000-000000000051
+user_id: 00000000-0000-0000-0000-000000000052
+admin_id: 00000000-0000-0000-0000-000000000053
+username: HR
+email: hr.test@edu.vn
+full_name: Hoàng Thị Test HR
+admin_code: AD0004
+gender: female
+date_of_birth: 1982-11-25
+phone_number: 0909444444
+citizen_id: 004444444444
+address: 987 Đường MNO, Quận Tân Bình, TP Hồ Chí Minh
+position: Trưởng phòng Nhân sự
 
-# ADMIN FACILITIES (Quản lý cơ sở vật chất)
-facilities_person_id: 00000000-0000-0000-0000-000000000061
-facilities_user_id: 00000000-0000-0000-0000-000000000062
-facilities_admin_id: 00000000-0000-0000-0000-000000000063
-facilities_username: FACILITIES
-facilities_email: facilities.test@edu.vn
-facilities_name: Vũ Văn Test Facilities
-facilities_code: AD0005
-facilities_gender: male
-facilities_dob: 1979-03-30
-facilities_phone: 0909555555
-facilities_position: Trưởng phòng Cơ sở vật chất
+[test_admin_facilities]
+person_id: 00000000-0000-0000-0000-000000000061
+user_id: 00000000-0000-0000-0000-000000000062
+admin_id: 00000000-0000-0000-0000-000000000063
+username: FACILITIES
+email: facilities.test@edu.vn
+full_name: Vũ Văn Test Facilities
+admin_code: AD0005
+gender: male
+date_of_birth: 1979-03-30
+phone_number: 0909555555
+citizen_id: 005555555555
+address: 147 Đường PQR, Quận Phú Nhuận, TP Hồ Chí Minh
+position: Trưởng phòng Cơ sở vật chất
 
 # ============================================================
 # ROLES DEFINITION

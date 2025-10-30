@@ -51,7 +51,6 @@ def create_schedule_changes(self):
                     'start_period', 'end_period', 'reason'],
                     schedule_change_rows)
 
-
 def create_notifications(self):
     """
     NEW: Generate notification schedules
@@ -64,16 +63,30 @@ def create_notifications(self):
     admin_user_id = self.data['fixed_accounts']['admin']['user_id']
     
     notification_types = ['event', 'tuition', 'schedule', 'important']
-    target_types = ['all', 'all_students', 'all_instructors']
+    target_types = ['all', 'all_students', 'all_instructors', 'class', 'faculty', 'instructor']
+    statuses = ['pending', 'sent', 'cancelled']
     
     # Create 20 sample notifications
     for i in range(20):
         schedule_id = self.generate_uuid()
         notif_type = random.choice(notification_types)
         target_type = random.choice(target_types)
+        status = random.choice(statuses)
+        
+        # target_id will be None for now - you can populate it later if needed
+        target_id = None
         
         scheduled_date = datetime.now() - timedelta(days=random.randint(0, 90))
         visible_from = scheduled_date - timedelta(days=random.randint(1, 7))
+        created_at = visible_from - timedelta(days=random.randint(1, 5))
+        updated_at = created_at + timedelta(days=random.randint(0, 3)) if random.random() > 0.5 else None
+        
+        # Event-specific fields
+        event_location = None
+        event_start_date = None
+        if notif_type == 'event':
+            event_location = random.choice(['Hội trường A', 'Phòng 101', 'Sân trường', 'Phòng hội thảo B', 'Khu vực ngoài trời'])
+            event_start_date = scheduled_date + timedelta(days=random.randint(1, 14))
         
         titles = {
             'event': f'Sự kiện: Hội thảo khoa học #{i+1}',
@@ -82,18 +95,28 @@ def create_notifications(self):
             'important': f'Thông báo quan trọng #{i+1}'
         }
         
+        is_read = 1 if random.random() > 0.7 else 0
+        is_deleted = 1 if random.random() > 0.95 else 0
+        is_active = 0 if is_deleted else (0 if random.random() > 0.9 else 1)
+        
         notification_rows.append([
             schedule_id,
             notif_type,
             titles.get(notif_type, 'Thông báo'),
-            f'Nội dung thông báo số {i+1}',
+            f'Nội dung thông báo số {i+1}. Đây là thông tin chi tiết về {titles.get(notif_type, "thông báo")}.',
             scheduled_date,
             visible_from,
-            0,  # is_read
+            is_read,
             target_type,
-            None,  # target_id
+            target_id,
             admin_user_id,
-            'sent'
+            status,
+            event_location,
+            event_start_date,
+            created_at,
+            updated_at,
+            is_deleted,
+            is_active
         ])
     
     self.add_statement(f"-- Total notifications: {len(notification_rows)}")
@@ -101,9 +124,10 @@ def create_notifications(self):
     self.bulk_insert('notification_schedule',
                     ['schedule_id', 'notification_type', 'title', 'content',
                     'scheduled_date', 'visible_from', 'is_read', 'target_type',
-                    'target_id', 'created_by_user', 'status'],
+                    'target_id', 'created_by_user', 'status', 'event_location',
+                    'event_start_date', 'created_at', 'updated_at', 'is_deleted',
+                    'is_active'],
                     notification_rows)
-
 def create_documents(self):
     """
     Generate document records for course materials

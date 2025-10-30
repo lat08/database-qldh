@@ -7,8 +7,9 @@ from .config import *
 def create_fixed_test_accounts(self):
     self.add_statement("\n-- ==================== FIXED TEST ACCOUNTS ====================")
     
-    password = self.test_config.get('password', '123456')
-    salt_b64 = self.test_config.get('salt_base64', 'MTExMQ==')
+    # Password configuration
+    password = self.spec_data.get('test_accounts_config', {}).get('password', '123456')
+    salt_b64 = self.spec_data.get('test_accounts_config', {}).get('salt_base64', 'MTExMQ==')
     salt_bytes = base64.b64decode(salt_b64)
     password_hash = self.create_password_hash(password, salt_bytes)
     
@@ -27,106 +28,114 @@ def create_fixed_test_accounts(self):
     instructor_role_id = self.role_id_map.get('Instructor')
     
     # ============================================================
-    # STUDENT ACCOUNT
+    # STUDENT ACCOUNTS (AUTO-DETECT ALL test_student* sections)
     # ============================================================
-    person_id = self.test_config.get('student_person_id')
-    user_id = self.test_config.get('student_user_id')
-    student_id = self.test_config.get('student_id')
-    
-    profile_pic = self.media_scanner.get_random_file('profile_pics')
-    profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
-    
-    person_rows.append([
-        person_id, 
-        self.test_config.get('student_name'),
-        self.test_config.get('student_dob'),
-        self.test_config.get('student_gender'),
-        self.test_config.get('student_email'),
-        self.test_config.get('student_phone'),
-        f"{random.randint(100000000000, 999999999999)}",
-        'TP Hồ Chí Minh',
-        profile_pic_url
-    ])
-    
-    user_rows.append([
-        user_id, 
-        person_id, 
-        self.test_config.get('student_username'),
-        password_hash, 
-        salt_b64, 
-        student_role_id,
-        'student',  # role_name (legacy)
-        'active'
-    ])
-    
-    # Store for later use
-    self.data['fixed_accounts']['student'] = {
-        'person_id': person_id,
-        'user_id': user_id,
-        'student_id': student_id,
-        'class_id': None  # Will be set during class creation
-    }
-    
-    self.add_statement(f"-- STUDENT IDs: person={person_id}, user={user_id}, student={student_id}")
+    for config_key in self.spec_data.keys():
+        if config_key.startswith('test_student') and config_key.endswith('_config'):
+            student_config = self.spec_data.get(config_key, {})
+            person_id = student_config.get('person_id')
+            user_id = student_config.get('user_id')
+            student_id = student_config.get('student_id')
+            
+            profile_pic = self.media_scanner.get_random_file('profile_pics')
+            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+            
+            person_rows.append([
+                person_id, 
+                student_config.get('full_name'),
+                student_config.get('date_of_birth'),
+                student_config.get('gender'),
+                student_config.get('email'),
+                student_config.get('phone_number'),
+                student_config.get('citizen_id'),
+                student_config.get('address', 'TP Hồ Chí Minh'),
+                profile_pic_url
+            ])
+            
+            user_rows.append([
+                user_id, 
+                person_id, 
+                student_config.get('username'),
+                password_hash, 
+                salt_b64, 
+                student_role_id,
+                'student',
+                'active'
+            ])
+            
+            # Store for later
+            account_name = config_key.replace('_config', '').replace('test_', '')
+            self.data['fixed_accounts'][account_name] = {
+                'person_id': person_id,
+                'user_id': user_id,
+                'student_id': student_id,
+                'class_id': None
+            }
+            
+            self.add_statement(f"-- STUDENT ({account_name}): person={person_id}, user={user_id}, student={student_id}")
     
     # ============================================================
-    # INSTRUCTOR ACCOUNT
+    # INSTRUCTOR ACCOUNTS (AUTO-DETECT ALL test_instructor* sections)
     # ============================================================
-    person_id = self.test_config.get('instructor_person_id')
-    user_id = self.test_config.get('instructor_user_id')
-    instructor_id = self.test_config.get('instructor_id')
-    
-    profile_pic = self.media_scanner.get_random_file('profile_pics')
-    profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
-    
-    person_rows.append([
-        person_id, 
-        self.test_config.get('instructor_name'),
-        self.test_config.get('instructor_dob'),
-        self.test_config.get('instructor_gender'),
-        self.test_config.get('instructor_email'),
-        self.test_config.get('instructor_phone'),
-        f"{random.randint(100000000000, 999999999999)}",
-        'TP Hồ Chí Minh',
-        profile_pic_url
-    ])
-    
-    user_rows.append([
-        user_id, 
-        person_id, 
-        self.test_config.get('instructor_username'),
-        password_hash, 
-        salt_b64, 
-        instructor_role_id,
-        'instructor',  # role_name (legacy)
-        'active'
-    ])
-    
-    instructor_rows.append([
-        instructor_id, 
-        person_id, 
-        self.test_config.get('instructor_code'),
-        self.test_config.get('instructor_degree'), 
-        self.test_config.get('instructor_specialization'),
-        None,  # department_id
-        self.test_config.get('instructor_hire_date'), 
-        'active'
-    ])
-    
-    self.data['instructors'].append({
-        'instructor_id': instructor_id, 
-        'person_id': person_id,
-        'full_name': self.test_config.get('instructor_name')
-    })
-    
-    self.data['fixed_accounts']['instructor'] = {
-        'person_id': person_id,
-        'user_id': user_id,
-        'instructor_id': instructor_id,
-        'full_name': self.test_config.get('instructor_name')
-    }
-    
-    self.add_statement(f"-- INSTRUCTOR IDs: person={person_id}, user={user_id}, instructor={instructor_id}")
+    for config_key in self.spec_data.keys():
+        if config_key.startswith('test_instructor') and config_key.endswith('_config') and 'admin' not in config_key:
+            instructor_config = self.spec_data.get(config_key, {})
+            person_id = instructor_config.get('person_id')
+            user_id = instructor_config.get('user_id')
+            instructor_id = instructor_config.get('instructor_id')
+            
+            profile_pic = self.media_scanner.get_random_file('profile_pics')
+            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+            
+            person_rows.append([
+                person_id, 
+                instructor_config.get('full_name'),
+                instructor_config.get('date_of_birth'),
+                instructor_config.get('gender'),
+                instructor_config.get('email'),
+                instructor_config.get('phone_number'),
+                instructor_config.get('citizen_id'),
+                instructor_config.get('address', 'TP Hồ Chí Minh'),
+                profile_pic_url
+            ])
+            
+            user_rows.append([
+                user_id, 
+                person_id, 
+                instructor_config.get('username'),
+                password_hash, 
+                salt_b64, 
+                instructor_role_id,
+                'instructor',
+                'active'
+            ])
+            
+            instructor_rows.append([
+                instructor_id, 
+                person_id, 
+                instructor_config.get('instructor_code'),
+                instructor_config.get('degree'), 
+                instructor_config.get('specialization'),
+                None,
+                instructor_config.get('hire_date'), 
+                'active'
+            ])
+            
+            self.data['instructors'].append({
+                'instructor_id': instructor_id, 
+                'person_id': person_id,
+                'full_name': instructor_config.get('full_name')
+            })
+            
+            account_name = config_key.replace('_config', '').replace('test_', '')
+            self.data['fixed_accounts'][account_name] = {
+                'person_id': person_id,
+                'user_id': user_id,
+                'instructor_id': instructor_id,
+                'full_name': instructor_config.get('full_name')
+            }
+            
+            self.add_statement(f"-- INSTRUCTOR ({account_name}): person={person_id}, user={user_id}, instructor={instructor_id}")
     
     # ============================================================
     # ADMIN ACCOUNTS (5 types)
@@ -140,10 +149,10 @@ def create_fixed_test_accounts(self):
     ]
     
     for admin_type, role_name in admin_types:
-        person_id = self.test_config.get(f'{admin_type}_person_id')
-        user_id = self.test_config.get(f'{admin_type}_user_id')
-        admin_id = self.test_config.get(f'{admin_type}_admin_id')
-        
+        admin_config = self.spec_data.get(f'test_admin_{admin_type}_config', {})
+        person_id = admin_config.get('person_id')
+        user_id = admin_config.get('user_id')
+        admin_id = admin_config.get('admin_id')
         role_id = self.role_id_map.get(role_name)
         
         profile_pic = self.media_scanner.get_random_file('profile_pics')
@@ -151,32 +160,32 @@ def create_fixed_test_accounts(self):
         
         person_rows.append([
             person_id,
-            self.test_config.get(f'{admin_type}_name'),
-            self.test_config.get(f'{admin_type}_dob'),
-            self.test_config.get(f'{admin_type}_gender'),
-            self.test_config.get(f'{admin_type}_email'),
-            self.test_config.get(f'{admin_type}_phone'),
-            f"{random.randint(100000000000, 999999999999)}",
-            'TP Hồ Chí Minh',
+            admin_config.get('full_name'),
+            admin_config.get('date_of_birth'),
+            admin_config.get('gender'),
+            admin_config.get('email'),
+            admin_config.get('phone_number'),
+            admin_config.get('citizen_id'),
+            admin_config.get('address', 'TP Hồ Chí Minh'),
             profile_pic_url
         ])
         
         user_rows.append([
             user_id, 
             person_id, 
-            self.test_config.get(f'{admin_type}_username'),
+            admin_config.get('username'),
             password_hash, 
             salt_b64, 
             role_id,
-            'admin',  # role_name (legacy) - all admin types use 'admin'
+            'admin',
             'active'
         ])
         
         admin_rows.append([
             admin_id, 
             person_id, 
-            self.test_config.get(f'{admin_type}_code'), 
-            self.test_config.get(f'{admin_type}_position'), 
+            admin_config.get('admin_code'), 
+            admin_config.get('position'), 
             'active'
         ])
         
@@ -187,7 +196,6 @@ def create_fixed_test_accounts(self):
             'role_name': role_name
         })
         
-        # Store principal as default admin for references
         if admin_type == 'principal':
             self.data['fixed_accounts']['admin'] = {
                 'person_id': person_id,
@@ -195,7 +203,7 @@ def create_fixed_test_accounts(self):
                 'admin_id': admin_id
             }
         
-        self.add_statement(f"-- {role_name.upper()} IDs: person={person_id}, user={user_id}, admin={admin_id}")
+        self.add_statement(f"-- {role_name.upper()}: person={person_id}, user={user_id}, admin={admin_id}")
     
     # Insert all fixed accounts
     self.bulk_insert('person', 
@@ -231,11 +239,9 @@ def create_regular_staff(self):
     person_rows = []
     user_rows = []
     instructor_rows = []
-    
     instructor_role_id = self.role_id_map.get('Instructor')
-    
-    # Instructors only
     num_instructors = int(self.staff_config.get('regular_instructors', 12))
+    
     for i in range(num_instructors):
         gender = random.choice(['male', 'female'])
         last_pool = last_names_male if gender == 'male' else last_names_female
@@ -245,7 +251,6 @@ def create_regular_staff(self):
         email = f"gv{i+1:02d}@edu.vn"
         phone = f"0{random.randint(300000000, 999999999)}"
         dob = date(random.randint(1970, 1990), random.randint(1, 12), random.randint(1, 28))
-        
         citizen_id = f"{random.randint(100000000000, 999999999999)}"
         
         profile_pic = self.media_scanner.get_random_file('profile_pics')
@@ -257,7 +262,7 @@ def create_regular_staff(self):
         user_id = self.generate_uuid()
         username = f"gv{i+1:02d}"
         user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 
-                        instructor_role_id, 'instructor', 'active'])  # Added role_name
+                        instructor_role_id, 'instructor', 'active'])
         
         instructor_id = self.generate_uuid()
         degree = random.choice(['Tiến sĩ', 'Thạc sĩ', 'Cử nhân'])
@@ -287,10 +292,11 @@ def create_regular_staff(self):
                     'specialization', 'department_id', 'hire_date', 'employment_status'], 
                     instructor_rows)
 
+
 def create_students(self):
     self.add_statement("\n-- ==================== STUDENTS ====================")
-    self.add_statement("-- NOTE: Fixed STUDENT account already created in create_fixed_test_accounts()")
-    self.add_statement("-- Only creating regular students here")
+    self.add_statement("-- NOTE: Fixed STUDENT person/user already created")
+    self.add_statement("-- Only creating student record for fixed account")
     
     first_names = self.names_config.get('first_names', '').split(', ')
     middle_names = self.names_config.get('middle_names', '').split(', ')
@@ -303,46 +309,37 @@ def create_students(self):
     person_rows = []
     user_rows = []
     student_rows = []
-    
-    # Get Student role ID
     student_role_id = self.role_id_map.get('Student')
     
     if not student_role_id:
         self.add_statement("-- ERROR: Student role not found! Cannot create students.")
         return
     
-    # Find target class for fixed student and update metadata only
-    target_class_year = int(self.test_config.get('student_class_year', 2023))
+    # Fixed student
+    student_config = self.spec_data.get('test_student_config', {})
+    target_class_year = int(student_config.get('class_year', 2023))
     target_class = next((c for c in self.data['classes'] if c['start_year'] == target_class_year), None)
     
     if target_class:
-        student_id = self.test_config.get('student_id', '00000000-0000-0000-0000-000000000003')
+        student_id = student_config.get('student_id')
         person_id = self.data['fixed_accounts']['student']['person_id']
+        student_code = student_config.get('student_code')
         
-        # Update fixed account with class info (person/user already created)
         self.data['fixed_accounts']['student']['class_id'] = target_class['class_id']
         self.data['fixed_accounts']['student']['class_start_year'] = target_class_year
         
-        # ONLY insert student record (person/user already exist from create_fixed_test_accounts)
-        student_rows.append([
-            student_id, 
-            person_id, 
-            self.test_config.get('student_code'),
-            target_class['class_id'], 
-            'active'
-        ])
+        student_rows.append([student_id, person_id, student_code, target_class['class_id'], 'active'])
         
-        # Add to students list
         self.data['students'].append({
             'student_id': student_id,
             'person_id': person_id,
-            'student_code': self.test_config.get('student_code'),
+            'student_code': student_code,
             'class_id': target_class['class_id'],
             'class_start_year': target_class_year,
             'is_fixed': True
         })
         
-        self.add_statement(f"-- Fixed STUDENT assigned to class: {target_class['class_name']} (year {target_class_year})")
+        self.add_statement(f"-- Fixed STUDENT assigned to: {target_class['class_name']} (year {target_class_year})")
     else:
         self.add_statement(f"-- WARNING: Could not find class for year {target_class_year}, skipping fixed student")
     
@@ -358,47 +355,22 @@ def create_students(self):
             dob = date(birth_year, random.randint(1, 12), random.randint(1, 28))
             email = f"sv{global_counter:05d}@edu.vn"
             phone = f"0{random.randint(300000000, 999999999)}"
-            
             citizen_id = f"{random.randint(100000000000, 999999999999)}"
             
-            # Get random profile picture for regular student
             profile_pic = self.media_scanner.get_random_file('profile_pics')
             profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
             
-            person_rows.append([
-                person_id, 
-                full_name, 
-                dob, 
-                gender, 
-                email, 
-                phone, 
-                citizen_id, 
-                'TP Hồ Chí Minh', 
-                profile_pic_url
-            ])
+            person_rows.append([person_id, full_name, dob, gender, email, phone, citizen_id, 
+                            'TP Hồ Chí Minh', profile_pic_url])
             
             user_id = self.generate_uuid()
             username = f"sv{global_counter:05d}"
-            user_rows.append([
-                user_id, 
-                person_id, 
-                username, 
-                'hashed_pwd', 
-                'salt', 
-                student_role_id,
-                'student',  # role_name (legacy)
-                'active'
-            ])
+            user_rows.append([user_id, person_id, username, 'hashed_pwd', 'salt', 
+                            student_role_id, 'student', 'active'])
             
             student_id = self.generate_uuid()
             student_code = f"SV{global_counter:06d}"
-            student_rows.append([
-                student_id, 
-                person_id, 
-                student_code, 
-                cls['class_id'], 
-                'active'
-            ])
+            student_rows.append([student_id, person_id, student_code, cls['class_id'], 'active'])
             
             self.data['students'].append({
                 'student_id': student_id,
@@ -411,11 +383,9 @@ def create_students(self):
             
             global_counter += 1
     
-    self.add_statement(f"-- Total students to create: {len(student_rows)}")
-    self.add_statement(f"-- Fixed student: 1 (student record only)")
-    self.add_statement(f"-- Regular students: {len(student_rows) - 1}")
+    self.add_statement(f"-- Total students: {len(student_rows)}")
+    self.add_statement(f"-- Fixed: 1, Regular: {len(student_rows) - 1}")
     
-    # Insert person/user ONLY for regular students (fixed student already has these)
     if person_rows:
         self.bulk_insert('person', 
                         ['person_id', 'full_name', 'date_of_birth', 'gender', 'email', 
@@ -428,11 +398,11 @@ def create_students(self):
                         'role_id', 'role_name', 'account_status'], 
                         user_rows)
     
-    # Insert ALL student records (fixed + regular)
     if student_rows:
         self.bulk_insert('student', 
                         ['student_id', 'person_id', 'student_code', 'class_id', 'enrollment_status'], 
                         student_rows)
+
 
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_fixed_test_accounts = create_fixed_test_accounts
