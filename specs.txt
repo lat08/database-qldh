@@ -27,11 +27,11 @@ citizen_id: 001234567890
 address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
 class_year: 2023
 
-[test_student]
+[test_student2]
 person_id: 00000000-0000-0000-0000-000000000999
 user_id: 00000000-0000-0000-0000-000000000999
 student_id: 00000000-0000-0000-0000-000000000999
-username: STUDENT
+username: THIEN
 email: tiensi.thien2005@gmail.com
 full_name: Phan Điền Mạnh Thiên
 student_code: SV001
@@ -79,6 +79,21 @@ phone_number: 0909111111
 citizen_id: 001111111111
 address: 789 Đường DEF, Quận 5, TP Hồ Chí Minh
 position: Hiệu trưởng
+
+[test_admin]
+person_id: 00000000-0000-0000-0000-000000009999
+user_id: 00000000-0000-0000-0000-000000009999
+admin_id: 00000000-0000-0000-0000-000000009999
+username: ADMIN
+email: admin.test@edu.vn
+full_name: Rick Astley
+admin_code: AD9999
+gender: male
+date_of_birth: 1975-01-10
+phone_number: 0909119999
+citizen_id: 001111119999
+address: 789 Đường DEF, Quận 5, TP Hồ Chí Minh
+position: Admin
 
 [test_admin_accountant]
 person_id: 00000000-0000-0000-0000-000000000031
@@ -148,6 +163,7 @@ position: Trưởng phòng Cơ sở vật chất
 
 Student | Sinh viên
 Instructor | Giảng viên
+Admin | Admin chung (Toàn quyền)
 Admin_Principal | Hiệu trưởng (Toàn quyền)
 Admin_Accountant | Kế toán (Học phí, báo cáo tài chính)
 Admin_Academic | Quản lý đào tạo (Môn học, chương trình đào tạo, khóa học, kỳ thi)
@@ -248,6 +264,9 @@ Admin_Facilities | login_system, manage_buildings, manage_rooms, manage_room_ame
 # ACADEMIC YEARS
 # ============================================================
 [academic_years]
+
+2021-2022: 2021-09-01 to 2022-08-31, active
+2022-2023: 2022-09-01 to 2023-08-31, active
 2023-2024: 2023-09-01 to 2024-08-31, active
 2024-2025: 2024-09-01 to 2025-08-31, active
 2025-2026: 2025-09-01 to 2026-08-31, active
@@ -379,23 +398,48 @@ Hóa học | Hóa hữu cơ | CHEM201 | 3 | 30 | 15
 Hóa học | Hóa phân tích | CHEM301 | 3 | 30 | 15
 
 # ============================================================
+# TRAINING SYSTEMS
+# ============================================================
+[training_systems]
+# Format: SystemName | Description
+
+Chính quy | Hệ đào tạo chính quy toàn thời gian
+Liên thông | Hệ liên thông từ cao đẳng lên đại học
+Vừa học vừa làm | Hệ vừa học vừa làm cho người đi làm
+Từ xa | Hệ đào tạo từ xa trực tuyến
+Chuyển tiếp | Hệ chuyển tiếp tín chỉ từ trường khác
+
+# ============================================================
 # CLASS CURRICULA (Which subjects each class takes)
 # ============================================================
 [class_curricula]
-# Format: ClassName | Department | SubjectCode1, SubjectCode2, ...
+# Format: ClassName | Department | TrainingSystem | SubjectCode1, SubjectCode2, ...
 # @ALL_GENERAL means include all general subjects
 
-K2023-1 | Khoa học máy tính | @ALL_GENERAL, CS101, CS201, CS202, CS203, CS204, CS301, CS302, CS303, MATH101, MATH102, MATH103
-K2023-2 | Hệ thống thông tin | @ALL_GENERAL, CS101, CS201, CS204, IS201, IS202, IS301, IS302, MATH101, MATH103
-K2023-3 | Kỹ thuật phần mềm | @ALL_GENERAL, CS101, CS201, CS202, SE201, SE202, SE301, SE302, MATH101, MATH103
+# 2021 Classes
+K2021-1 | Khoa học máy tính | Chính quy | @ALL_GENERAL, CS101, CS201, CS202, CS203, CS204, CS301, CS302, CS303, MATH101, MATH102, MATH103
+K2021-2 | Hệ thống thông tin | Liên thông | @ALL_GENERAL, CS101, CS201, CS204, IS201, IS202, IS301, IS302, MATH101, MATH103
+K2021-3 | Kỹ thuật phần mềm | Chính quy | @ALL_GENERAL, CS101, CS201, CS202, SE201, SE202, SE301, SE302, MATH101, MATH103
 
-K2024-1 | Quản trị kinh doanh | @ALL_GENERAL, BA101, BA201, BA202, BA301, FIN101, MKT101
-K2024-2 | Tài chính - Ngân hàng | @ALL_GENERAL, FIN101, FIN201, FIN202, FIN301, BA101, MATH201
-K2024-3 | Marketing | @ALL_GENERAL, MKT101, MKT201, MKT301, MKT302, BA101, BA201
+# 2022 Classes
+K2022-1 | Quản trị kinh doanh | Chính quy | @ALL_GENERAL, BA101, BA201, BA202, BA301, FIN101, MKT101
+K2022-2 | Tài chính - Ngân hàng | Vừa học vừa làm | @ALL_GENERAL, FIN101, FIN201, FIN202, FIN301, BA101, MATH201
+K2022-3 | Marketing | Chính quy | @ALL_GENERAL, MKT101, MKT201, MKT301, MKT302, BA101, BA201
 
-K2025-1 | Cơ khí | @ALL_GENERAL, ME101, ME201, ME202, ME301, PHY101, PHY102, MATH101, MATH102
-K2025-2 | Điện - Điện tử | @ALL_GENERAL, EE101, EE201, EE301, EE302, PHY101, PHY102, MATH101, MATH102
-K2025-3 | Xây dựng | @ALL_GENERAL, CE101, CE201, CE202, CE301, PHY101, MATH101, MATH102
+# 2023 Classes
+K2023-1 | Khoa học máy tính | Chính quy | @ALL_GENERAL, CS101, CS201, CS202, CS203, CS204, CS301, CS302, CS303, MATH101, MATH102, MATH103
+K2023-2 | Hệ thống thông tin | Vừa học vừa làm | @ALL_GENERAL, CS101, CS201, CS204, IS201, IS202, IS301, IS302, MATH101, MATH103
+K2023-3 | Kỹ thuật phần mềm | Chính quy | @ALL_GENERAL, CS101, CS201, CS202, SE201, SE202, SE301, SE302, MATH101, MATH103
+
+# 2024 Classes
+K2024-1 | Quản trị kinh doanh | Chính quy | @ALL_GENERAL, BA101, BA201, BA202, BA301, FIN101, MKT101
+K2024-2 | Tài chính - Ngân hàng | Từ xa | @ALL_GENERAL, FIN101, FIN201, FIN202, FIN301, BA101, MATH201
+K2024-3 | Marketing | Chính quy | @ALL_GENERAL, MKT101, MKT201, MKT301, MKT302, BA101, BA201
+
+# 2025 Classes
+K2025-1 | Cơ khí | Chính quy | @ALL_GENERAL, ME101, ME201, ME202, ME301, PHY101, PHY102, MATH101, MATH102
+K2025-2 | Điện - Điện tử | Chuyển tiếp | @ALL_GENERAL, EE101, EE201, EE301, EE302, PHY101, PHY102, MATH101, MATH102
+K2025-3 | Xây dựng | Chuyển tiếp | @ALL_GENERAL, CE101, CE201, CE202, CE301, PHY101, MATH101, MATH102
 
 # ============================================================
 # STUDENTS

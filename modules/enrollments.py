@@ -4,39 +4,47 @@ from .config import *
 
 def create_student_enrollments(self):
     """
-    UPDATED: Track enrollment IDs and course info for payment generation
-    Fixed: Added deduplication to prevent UNIQUE constraint violations
+    UPDATED: Guarantee that senior students (2021-2022) complete ALL curriculum subjects
+    Strategy:
+    1. First pass: Normal enrollment with conflict checking
+    2. Second pass: Force-enroll seniors in missing required subjects
+    3. Ensure all senior enrollments have passing grades (>5.0)
     """
-    self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (REALISTIC & MASSIVE) ====================")
-    self.add_statement("-- Students enrolled with STRICT schedule conflict checking")
-    self.add_statement("-- Fixed STUDENT account gets deterministic grades for testing")
+    self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (GUARANTEED CURRICULUM COMPLETION) ====================")
+    self.add_statement("-- Senior students (2021-2022) will complete 100% of curriculum requirements")
+    self.add_statement("-- All completed courses will have passing grades (>5.0)")
     
     enrollment_rows = []
-    
-    # IMPORTANT: Initialize enrollments list to track IDs and course info
     self.data['enrollments'] = []
-    
-    # Track enrollments to prevent duplicates: (student_id, course_class_id) -> True
     enrolled_combinations = set()
     
-    # Group course_classes by course_id
-    course_classes_by_course = defaultdict(list)
+    # Group course_classes by (course_id, semester_id)
+    course_classes_by_course_semester = defaultdict(list)
     for cc in self.data['course_classes']:
-        course_classes_by_course[cc['course_id']].append(cc)
+        key = (cc['course_id'], cc['semester_id'])
+        course_classes_by_course_semester[key].append(cc)
     
-    att_min = float(self.enrollment_config.get('attendance_min', 7.0))
-    att_max = float(self.enrollment_config.get('attendance_max', 10.0))
-    mid_min = float(self.enrollment_config.get('midterm_min', 5.0))
-    mid_max = float(self.enrollment_config.get('midterm_max', 9.5))
-    fin_min = float(self.enrollment_config.get('final_min', 5.0))
-    fin_max = float(self.enrollment_config.get('final_max', 9.5))
+    # Build index: subject_id -> list of courses
+    courses_by_subject = defaultdict(list)
+    for course in self.data['courses']:
+        courses_by_subject[course['subject_id']].append(course)
     
-    # Track each student's schedule: student_id -> {semester_id: [(day, start_period, end_period), ...]}
+    # Grade ranges (MINIMUM 5.0 for passing)
+    att_min = 7.0  # Attendance always good
+    att_max = 10.0
+    mid_min = 5.0  # Passing grade minimum
+    mid_max = 9.5
+    fin_min = 5.0  # Passing grade minimum
+    fin_max = 9.5
+    
     student_schedules = defaultdict(lambda: defaultdict(list))
-    
     conflict_count = 0
     skipped_count = 0
-    duplicate_count = 0
+    forced_enrollment_count = 0
+    
+    # Track completion statistics
+    students_with_full_curriculum = 0
+    total_senior_students = 0
     
     for student in self.data['students']:
         class_id = student['class_id']
@@ -48,84 +56,74 @@ def create_student_enrollments(self):
         is_fixed = student.get('is_fixed', False)
         student_start_year = student['class_start_year']
         
-        # Get all courses this student should take
-        student_courses = []
+        # Determine if senior (should have completed curriculum by now)
+        is_senior = student_start_year <= 2022
+        if is_senior:
+            total_senior_students += 1
+        
+        # Track enrolled subjects for this student
+        enrolled_subjects_for_student = set()
+        
+        # =================================================================
+        # PHASE 1: NORMAL ENROLLMENT (with conflict checking)
+        # =================================================================
         for course in self.data['courses']:
             if course['subject_id'] not in curriculum_subject_ids:
                 continue
-            
-            # Only enroll in courses at or after student's start year
             if course['start_year'] < student_start_year:
                 continue
             
-            # Don't enroll in future semesters (after Fall 2025)
-            if course['start_year'] > 2025:
-                continue
-            if course['start_year'] == 2025 and course['semester_type'] == 'summer':
-                continue  # Skip summer 2025 (future)
+            # For non-seniors, skip future courses
+            if not is_senior:
+                if course['start_year'] > 2025:
+                    continue
+                if course['start_year'] == 2025 and course['semester_type'] == 'summer':
+                    continue
             
-            student_courses.append(course)
-        
-        # Sort courses by semester for proper scheduling
-        semester_order = {'fall': 1, 'spring': 2, 'summer': 3}
-        student_courses.sort(key=lambda c: (c['start_year'], semester_order.get(c['semester_type'], 0)))
-        
-        for course in student_courses:
-            # Find available course_class sections for this course
-            available_classes = course_classes_by_course.get(course['course_id'], [])
+            # Find available course_class sections
+            key = (course['course_id'], course['semester_id'])
+            available_classes = course_classes_by_course_semester.get(key, [])
             if not available_classes:
                 continue
             
-            # Try to find a course_class section without schedule conflicts
+            # Try to find conflict-free section
             assigned_course_class = None
-            
             for cc in available_classes:
-                # CHECK FOR DUPLICATE ENROLLMENT FIRST
                 enrollment_key = (student['student_id'], cc['course_class_id'])
                 if enrollment_key in enrolled_combinations:
-                    duplicate_count += 1
                     continue
                 
-                # Check if this course_class conflicts with student's existing schedule IN THIS SEMESTER
+                # Check schedule conflicts
                 has_conflict = False
-                
                 semester_schedule = student_schedules[student['student_id']][cc['semester_id']]
                 
-                # Check each day this course_class meets
                 for day in cc['days']:
                     for existing_schedule in semester_schedule:
                         existing_day, existing_start, existing_end = existing_schedule
-                        
-                        # Check if same day
                         if day == existing_day:
-                            # Check time overlap
                             if not (cc['end_period'] < existing_start or cc['start_period'] > existing_end):
                                 has_conflict = True
                                 conflict_count += 1
                                 break
-                    
                     if has_conflict:
                         break
                 
-                # Check if section is full
-                if not has_conflict:
-                    if cc['enrolled_count'] < cc['max_students']:
-                        assigned_course_class = cc
-                        cc['enrolled_count'] += 1
-                        break
+                if not has_conflict and cc['enrolled_count'] < cc['max_students']:
+                    assigned_course_class = cc
+                    cc['enrolled_count'] += 1
+                    break
             
-            # If NO conflict-free section found, SKIP this enrollment
             if not assigned_course_class:
-                skipped_count += 1
-                if is_fixed:
-                    self.add_statement(f"-- SKIPPED: STUDENT (fixed) - {course['subject_code']} in {course['start_year']} {course['semester_type']} (No conflict-free section)")
+                if not is_senior:
+                    skipped_count += 1
                 continue
             
-            # MARK AS ENROLLED (prevent duplicates)
+            # Mark as enrolled
             enrollment_key = (student['student_id'], assigned_course_class['course_class_id'])
             enrolled_combinations.add(enrollment_key)
+            enrolled_subjects_for_student.add(course['subject_id'])
             
-            # Add to student's schedule for THIS SEMESTER
+            # Add to schedule
             for day in assigned_course_class['days']:
                 student_schedules[student['student_id']][assigned_course_class['semester_id']].append((
                     day,
@@ -135,109 +133,169 @@ def create_student_enrollments(self):
             
             enrollment_id = self.generate_uuid()
             
-            # Determine if this is a past, current, or future semester
-            is_past_semester = (course['start_year'] < 2025) or \
-                            (course['start_year'] == 2025 and course['semester_type'] == 'spring')
-            is_current_semester = (course['start_year'] == 2025 and course['semester_type'] == 'fall')
+            # Determine grades based on semester
+            is_past = (course['start_year'] < 2025) or \
+                     (course['start_year'] == 2025 and course['semester_type'] == 'spring')
+            is_current = (course['start_year'] == 2025 and course['semester_type'] == 'fall')
             
-            if is_fixed:
-                # FIXED STUDENT ACCOUNT - DETERMINISTIC GRADES
-                if is_past_semester:
-                    # ALL past semesters: COMPLETED with full grades
-                    attendance = round(random.uniform(7.5, 9.5), 2)
-                    midterm = round(random.uniform(6.5, 9.0), 2)
-                    final = round(random.uniform(7.0, 9.5), 2)
-                    status = 'completed'
-                    
-                elif is_current_semester:
-                    # Fall 2025: IN PROGRESS - ALL have attendance + midterm, NO finals
-                    attendance = round(random.uniform(7.5, 9.5), 2)
-                    midterm = round(random.uniform(6.5, 9.0), 2)
-                    final = None
-                    status = 'registered'
-                    
-                else:
-                    # Future semesters: SKIP
-                    continue
-                    
-            else:
-                # REGULAR STUDENTS - VARIED GRADES
-                if is_past_semester:
-                    # Past semesters: Completed with full grades
+            if is_past or (is_senior and not is_current):
+                # Past courses or senior backfill: ALL COMPLETED with PASSING grades
+                attendance = round(random.uniform(att_min, att_max), 2)
+                midterm = round(random.uniform(max(mid_min, 5.5), mid_max), 2)  # At least 5.5
+                final = round(random.uniform(max(fin_min, 6.0), fin_max), 2)    # At least 6.0
+                status = 'completed'
+            elif is_current and not is_fixed:
+                # Current semester (Fall 2025): Some have midterm, some don't
+                rand = random.random()
+                if rand < 0.60:
                     attendance = round(random.uniform(att_min, att_max), 2)
                     midterm = round(random.uniform(mid_min, mid_max), 2)
-                    final = round(random.uniform(fin_min, fin_max), 2)
-                    status = 'completed'
-                    
-                elif is_current_semester:
-                    # Fall 2025: In progress - varied completion
-                    rand = random.random()
-                    if rand < 0.60:  # 60% have midterm done
-                        attendance = round(random.uniform(att_min, att_max), 2)
-                        midterm = round(random.uniform(mid_min, mid_max), 2)
-                        final = None
-                    elif rand < 0.85:  # 25% have only attendance
-                        attendance = round(random.uniform(att_min, att_max), 2)
-                        midterm = None
-                        final = None
-                    else:  # 15% not started
-                        attendance = None
-                        midterm = None
-                        final = None
-                    status = 'registered'
-                    
+                    final = None
+                elif rand < 0.85:
+                    attendance = round(random.uniform(att_min, att_max), 2)
+                    midterm = None
+                    final = None
                 else:
-                    # Future semesters: SKIP
-                    continue
+                    attendance = None
+                    midterm = None
+                    final = None
+                status = 'registered'
+            elif is_current and is_fixed:
+                # Fixed student always has midterm
+                attendance = round(random.uniform(7.5, 9.5), 2)
+                midterm = round(random.uniform(6.5, 9.0), 2)
+                final = None
+                status = 'registered'
+            else:
+                continue
             
-            # Insert enrollment
             enrollment_rows.append([
                 enrollment_id,
                 student['student_id'],
                 assigned_course_class['course_class_id'],
                 course['semester_start'],
                 status,
-                None,  # cancellation_date
-                None,  # cancellation_reason
-                attendance,
-                midterm,
-                final
+                None, None,
+                attendance, midterm, final
             ])
             
-            # STORE enrollment data for payment generation (with course info)
             self.data['enrollments'].append({
                 'enrollment_id': enrollment_id,
                 'student_id': student['student_id'],
                 'course_class_id': assigned_course_class['course_class_id'],
-                'course_id': course['course_id'],  # Store course_id
-                'semester_id': course['semester_id'],  # Store semester_id
+                'course_id': course['course_id'],
+                'semester_id': course['semester_id'],
                 'credits': course['credits'],
                 'enrollment_date': course['semester_start'],
                 'status': status
             })
+        
+        # =================================================================
+        # PHASE 2: FORCE-ENROLL SENIORS IN MISSING REQUIRED SUBJECTS
+        # =================================================================
+        if is_senior:
+            missing_subjects = curriculum_subject_ids - enrolled_subjects_for_student
             
-            # Log fixed student enrollments for debugging
-            if is_fixed:
-                grade_status = "FULL GRADES" if final is not None else \
-                            "ATT+MID" if midterm is not None else \
-                            "ATT ONLY" if attendance is not None else "NO GRADES"
-                self.add_statement(f"-- ENROLLED: STUDENT (fixed) - {course['subject_code']} - {course['start_year']} {course['semester_type']} - {grade_status}")
+            if not missing_subjects:
+                # This senior completed everything!
+                students_with_full_curriculum += 1
+            
+            for subject_id in missing_subjects:
+                # Find ANY course for this subject (prefer older semesters)
+                available_courses = courses_by_subject.get(subject_id, [])
+                if not available_courses:
+                    self.add_statement(f"-- WARNING: No courses available for subject {subject_id}")
+                    continue
+                
+                # Sort by year/semester (earliest first)
+                available_courses.sort(key=lambda c: (
+                    c['start_year'],
+                    {'fall': 1, 'spring': 2, 'summer': 3}[c['semester_type']]
+                ))
+                
+                # Try to find a course we can enroll in
+                enrolled_in_missing = False
+                for course in available_courses:
+                    key = (course['course_id'], course['semester_id'])
+                    available_classes = course_classes_by_course_semester.get(key, [])
+                    if not available_classes:
+                        continue
+                    
+                    # Pick any available section (ignore capacity and conflicts for seniors)
+                    for cc in available_classes:
+                        enrollment_key = (student['student_id'], cc['course_class_id'])
+                        if enrollment_key in enrolled_combinations:
+                            continue
+                        
+                        # FORCE ENROLL (ignore all restrictions)
+                        enrolled_combinations.add(enrollment_key)
+                        enrolled_subjects_for_student.add(subject_id)
+                        forced_enrollment_count += 1
+                        
+                        enrollment_id = self.generate_uuid()
+                        
+                        # ALL FORCED ENROLLMENTS ARE COMPLETED with PASSING grades
+                        attendance = round(random.uniform(7.0, 9.5), 2)
+                        midterm = round(random.uniform(5.5, 8.5), 2)  # At least 5.5
+                        final = round(random.uniform(6.0, 9.0), 2)    # At least 6.0
+                        status = 'completed'
+                        
+                        enrollment_rows.append([
+                            enrollment_id,
+                            student['student_id'],
+                            cc['course_class_id'],
+                            course['semester_start'],
+                            status,
+                            None, None,
+                            attendance, midterm, final
+                        ])
+                        
+                        self.data['enrollments'].append({
+                            'enrollment_id': enrollment_id,
+                            'student_id': student['student_id'],
+                            'course_class_id': cc['course_class_id'],
+                            'course_id': course['course_id'],
+                            'semester_id': course['semester_id'],
+                            'credits': course['credits'],
+                            'enrollment_date': course['semester_start'],
+                            'status': status
+                        })
+                        
+                        enrolled_in_missing = True
+                        break
+                    
+                    if enrolled_in_missing:
+                        break
+                
+                if not enrolled_in_missing:
+                    self.add_statement(f"-- ERROR: Could not enroll senior {student['student_code']} in subject {subject_id}")
+            
+            # Final check: did this senior complete everything?
+            if not (curriculum_subject_ids - enrolled_subjects_for_student):
+                students_with_full_curriculum += 1
     
+    # Statistics
     self.add_statement(f"\n-- ========================================")
     self.add_statement(f"-- ENROLLMENT SUMMARY")
     self.add_statement(f"-- ========================================")
-    self.add_statement(f"-- Total enrollments created: {len(enrollment_rows)}")
+    self.add_statement(f"-- Total enrollments: {len(enrollment_rows)}")
+    self.add_statement(f"-- Normal enrollments: {len(enrollment_rows) - forced_enrollment_count}")
+    self.add_statement(f"-- Forced enrollments (seniors): {forced_enrollment_count}")
     self.add_statement(f"-- Schedule conflicts detected: {conflict_count}")
-    self.add_statement(f"-- Duplicate enrollments prevented: {duplicate_count}")
-    self.add_statement(f"-- Enrollments skipped (no conflict-free slot): {skipped_count}")
+    self.add_statement(f"-- Skipped (non-seniors): {skipped_count}")
+    self.add_statement(f"-- ")
+    self.add_statement(f"-- CURRICULUM COMPLETION:")
+    self.add_statement(f"-- Total senior students: {total_senior_students}")
+    self.add_statement(f"-- Seniors with 100% curriculum: {students_with_full_curriculum}")
+    if total_senior_students > 0:
+        completion_rate = (students_with_full_curriculum / total_senior_students * 100)
+        self.add_statement(f"-- Completion rate: {completion_rate:.1f}%")
     
-    # REMOVED is_paid column from insert
     self.bulk_insert('student_enrollment',
                     ['enrollment_id', 'student_id', 'course_class_id', 'enrollment_date',
                     'enrollment_status', 'cancellation_date', 'cancellation_reason',
                     'attendance_grade', 'midterm_grade', 'final_grade'],
                     enrollment_rows)
-
 
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_student_enrollments = create_student_enrollments

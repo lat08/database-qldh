@@ -96,16 +96,44 @@ def create_academic_years_and_semesters(self):
     # FIXED: Changed 'status' to 'semester_status'
     self.bulk_insert('semester', ['semester_id', 'semester_name', 'academic_year_id', 'semester_type', 'start_date', 'end_date', 'registration_start_date', 'registration_end_date', 'semester_status'], sem_rows)
 
+def create_training_systems(self):
+    self.add_statement("\n-- ==================== TRAINING SYSTEMS ====================")
+    
+    training_system_rows = []
+    
+    for line in self.spec_data.get('training_systems', []):
+        parts = [p.strip() for p in line.split('|')]
+        system_name = parts[0]
+        description = parts[1] if len(parts) > 1 else ''
+        
+        training_system_id = self.generate_uuid()
+        
+        self.data['training_systems'].append({
+            'training_system_id': training_system_id,
+            'training_system_name': system_name
+        })
+        
+        training_system_rows.append([training_system_id, system_name, description])
+    
+    self.bulk_insert('training_system', 
+                    ['training_system_id', 'training_system_name', 'description'], 
+                    training_system_rows)
+
 def create_classes(self):
     self.add_statement("\n-- ==================== CLASSES ====================")
     
     class_rows = []
     class_names = set()
     
+    # Build training system lookup
+    training_system_lookup = {ts['training_system_name']: ts['training_system_id'] 
+                             for ts in self.data['training_systems']}
+    
     for line in self.spec_data.get('class_curricula', []):
         parts = [p.strip() for p in line.split('|')]
         class_name = parts[0]
         dept_name = parts[1]
+        training_system_name = parts[2]
         
         if class_name in class_names:
             continue
@@ -114,12 +142,25 @@ def create_classes(self):
         # Extract year from class name (e.g., K2023-1 -> 2023)
         year = int(class_name[1:5])
         
-        # Find matching academic year and department
+        # Find matching academic year, department, and training system
         matching_ay = next((ay for ay in self.data['academic_years'] if ay['start_year'] == year), None)
         matching_dept = next((d for d in self.data['departments'] if d['department_name'] == dept_name), None)
+        training_system_id = training_system_lookup.get(training_system_name)
         
-        if not matching_ay or not matching_dept:
+        if not matching_ay or not matching_dept or not training_system_id:
+            self.add_statement(f"-- WARNING: Missing data for {class_name}")
             continue
+        
+        # Calculate end_academic_year_id (4-year program)
+        end_year = year + 4
+        end_academic_year = next((ay for ay in self.data['academic_years'] 
+                                 if ay['start_year'] == end_year), None)
+        
+        if not end_academic_year:
+            end_academic_year = max(self.data['academic_years'], 
+                                   key=lambda x: x['start_year'])
+        
+        end_academic_year_id = end_academic_year['academic_year_id']
         
         class_id = self.generate_uuid()
         class_code = class_name
@@ -130,18 +171,37 @@ def create_classes(self):
             'class_code': class_code,
             'class_name': class_name,
             'department_id': matching_dept['department_id'],
+            'training_system_id': training_system_id,
             'start_academic_year_id': matching_ay['academic_year_id'],
+            'end_academic_year_id': end_academic_year_id,
             'start_year': year,
-            'department_name': dept_name
+            'department_name': dept_name,
+            'training_system_name': training_system_name
         })
         
-        # FIXED: Added 'department_id' and 'advisor_instructor_id', changed 'status' to 'class_status'
-        class_rows.append([class_id, class_code, class_name, matching_dept['department_id'], 
-                        advisor_id, matching_ay['academic_year_id'], 'active'])
+        class_rows.append([
+            class_id, 
+            class_code, 
+            class_name, 
+            matching_dept['department_id'], 
+            advisor_id, 
+            training_system_id, 
+            matching_ay['academic_year_id'],
+            end_academic_year_id,
+            'active'
+        ])
     
-    # FIXED: Added 'department_id' and 'advisor_instructor_id', changed 'status' to 'class_status'
-    self.bulk_insert('class', ['class_id', 'class_code', 'class_name', 'department_id', 
-                            'advisor_instructor_id', 'start_academic_year_id', 'class_status'], class_rows)
+    self.bulk_insert('class', [
+        'class_id', 
+        'class_code', 
+        'class_name', 
+        'department_id', 
+        'advisor_instructor_id', 
+        'training_system_id', 
+        'start_academic_year_id',
+        'end_academic_year_id',
+        'class_status'
+    ], class_rows)
 
 # ==================== CURRICULUM MAPPING ====================
 def map_class_curricula(self):
@@ -168,12 +228,12 @@ def map_class_curricula(self):
             continue
         
         parts = [p.strip() for p in curriculum_line.split('|')]
-        if len(parts) < 3:
+        if len(parts) < 4:  # Changed from 3 to 4
             self.add_statement(f"-- WARNING: Invalid curriculum line for {cls['class_code']}")
             cls['curriculum'] = []
             continue
         
-        subject_codes_str = parts[2]
+        subject_codes_str = parts[3]  # Changed from parts[2] to parts[3]
         
         # Parse subject codes
         subject_codes = []
@@ -202,6 +262,7 @@ def map_class_curricula(self):
 
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_faculties_and_departments = create_faculties_and_departments
+SQLDataGenerator.create_training_systems = create_training_systems
 SQLDataGenerator.create_academic_years_and_semesters = create_academic_years_and_semesters
 SQLDataGenerator.create_classes = create_classes
 SQLDataGenerator.map_class_curricula = map_class_curricula

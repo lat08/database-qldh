@@ -36,7 +36,8 @@ class SQLDataGenerator:
             'amenities': [],
             'course_classes': [],
             'fixed_accounts': {},
-            'regulations': []
+            'regulations': [],
+            'training_systems': [],
         }
         
         # Parse spec config
@@ -131,6 +132,7 @@ class SQLDataGenerator:
         self.add_statement("-- PHASE 3: ORGANIZATIONAL STRUCTURE")
         self.add_statement("-- =========================================================================")
         
+        self.create_training_systems()
         self.create_faculties_and_departments()
         self.create_academic_years_and_semesters()
         

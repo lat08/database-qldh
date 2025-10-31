@@ -3,7 +3,6 @@ import base64
 from datetime import date
 from .config import *
 
-
 def create_fixed_test_accounts(self):
     self.add_statement("\n-- ==================== FIXED TEST ACCOUNTS ====================")
     
@@ -138,72 +137,88 @@ def create_fixed_test_accounts(self):
             self.add_statement(f"-- INSTRUCTOR ({account_name}): person={person_id}, user={user_id}, instructor={instructor_id}")
     
     # ============================================================
-    # ADMIN ACCOUNTS (5 types)
+    # ADMIN ACCOUNTS (AUTO-DETECT ALL test_admin* sections)
     # ============================================================
-    admin_types = [
-        ('principal', 'Admin_Principal'),
-        ('accountant', 'Admin_Accountant'),
-        ('academic', 'Admin_Academic'),
-        ('hr', 'Admin_HR'),
-        ('facilities', 'Admin_Facilities')
-    ]
-    
-    for admin_type, role_name in admin_types:
-        admin_config = self.spec_data.get(f'test_admin_{admin_type}_config', {})
-        person_id = admin_config.get('person_id')
-        user_id = admin_config.get('user_id')
-        admin_id = admin_config.get('admin_id')
-        role_id = self.role_id_map.get(role_name)
-        
-        profile_pic = self.media_scanner.get_random_file('profile_pics')
-        profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
-        
-        person_rows.append([
-            person_id,
-            admin_config.get('full_name'),
-            admin_config.get('date_of_birth'),
-            admin_config.get('gender'),
-            admin_config.get('email'),
-            admin_config.get('phone_number'),
-            admin_config.get('citizen_id'),
-            admin_config.get('address', 'TP Hồ Chí Minh'),
-            profile_pic_url
-        ])
-        
-        user_rows.append([
-            user_id, 
-            person_id, 
-            admin_config.get('username'),
-            password_hash, 
-            salt_b64, 
-            role_id,
-            'admin',
-            'active'
-        ])
-        
-        admin_rows.append([
-            admin_id, 
-            person_id, 
-            admin_config.get('admin_code'), 
-            admin_config.get('position'), 
-            'active'
-        ])
-        
-        self.data['admins'].append({
-            'admin_id': admin_id, 
-            'person_id': person_id,
-            'admin_type': admin_type,
-            'role_name': role_name
-        })
-        
-        if admin_type == 'principal':
-            self.data['fixed_accounts']['admin'] = {
+    for config_key in self.spec_data.keys():
+        if config_key.startswith('test_admin') and config_key.endswith('_config'):
+            admin_config = self.spec_data.get(config_key, {})
+            person_id = admin_config.get('person_id')
+            user_id = admin_config.get('user_id')
+            admin_id = admin_config.get('admin_id')
+            
+            # Determine role based on config key name
+            if 'principal' in config_key:
+                role_name = 'Admin_Principal'
+                admin_type = 'principal'
+            elif 'accountant' in config_key:
+                role_name = 'Admin_Accountant'
+                admin_type = 'accountant'
+            elif 'academic' in config_key:
+                role_name = 'Admin_Academic'
+                admin_type = 'academic'
+            elif 'hr' in config_key:
+                role_name = 'Admin_HR'
+                admin_type = 'hr'
+            elif 'facilities' in config_key:
+                role_name = 'Admin_Facilities'
+                admin_type = 'facilities'
+            else:
+                # Generic admin account
+                role_name = 'Admin'
+                admin_type = 'admin'
+            
+            role_id = self.role_id_map.get(role_name)
+            
+            profile_pic = self.media_scanner.get_random_file('profile_pics')
+            profile_pic_url = self.media_scanner.build_url('profile_pics', profile_pic) if profile_pic else None
+            
+            person_rows.append([
+                person_id,
+                admin_config.get('full_name'),
+                admin_config.get('date_of_birth'),
+                admin_config.get('gender'),
+                admin_config.get('email'),
+                admin_config.get('phone_number'),
+                admin_config.get('citizen_id'),
+                admin_config.get('address', 'TP Hồ Chí Minh'),
+                profile_pic_url
+            ])
+            
+            user_rows.append([
+                user_id, 
+                person_id, 
+                admin_config.get('username'),
+                password_hash, 
+                salt_b64, 
+                role_id,
+                'admin',
+                'active'
+            ])
+            
+            admin_rows.append([
+                admin_id, 
+                person_id, 
+                admin_config.get('admin_code'), 
+                admin_config.get('position'), 
+                'active'
+            ])
+            
+            self.data['admins'].append({
+                'admin_id': admin_id, 
+                'person_id': person_id,
+                'admin_type': admin_type,
+                'role_name': role_name
+            })
+            
+            # Store in fixed_accounts with the appropriate key
+            account_name = config_key.replace('_config', '').replace('test_', '')
+            self.data['fixed_accounts'][account_name] = {
                 'person_id': person_id,
                 'user_id': user_id,
                 'admin_id': admin_id
             }
-        
-        self.add_statement(f"-- {role_name.upper()}: person={person_id}, user={user_id}, admin={admin_id}")
+            
+            self.add_statement(f"-- {role_name.upper()} ({account_name}): person={person_id}, user={user_id}, admin={admin_id}")
     
     # Insert all fixed accounts
     self.bulk_insert('person', 
@@ -296,7 +311,7 @@ def create_regular_staff(self):
 def create_students(self):
     self.add_statement("\n-- ==================== STUDENTS ====================")
     self.add_statement("-- NOTE: Fixed STUDENT person/user already created")
-    self.add_statement("-- Only creating student record for fixed account")
+    self.add_statement("-- Enrollment status distribution: 80% active, 10% graduated, 5% suspended, 3% dropped_out, 2% inactive")
     
     first_names = self.names_config.get('first_names', '').split(', ')
     middle_names = self.names_config.get('middle_names', '').split(', ')
@@ -315,6 +330,25 @@ def create_students(self):
         self.add_statement("-- ERROR: Student role not found! Cannot create students.")
         return
     
+    # Define enrollment status weights (must sum to 100)
+    enrollment_statuses = [
+        ('active', 80),
+        ('graduated', 10),
+        ('suspended', 5),
+        ('dropped_out', 3),
+        ('inactive', 2)
+    ]
+    
+    def get_random_enrollment_status():
+        """Weighted random selection of enrollment status"""
+        rand = random.randint(1, 100)
+        cumulative = 0
+        for status, weight in enrollment_statuses:
+            cumulative += weight
+            if rand <= cumulative:
+                return status
+        return 'active'  # Fallback
+    
     # Fixed student
     student_config = self.spec_data.get('test_student_config', {})
     target_class_year = int(student_config.get('class_year', 2023))
@@ -328,6 +362,7 @@ def create_students(self):
         self.data['fixed_accounts']['student']['class_id'] = target_class['class_id']
         self.data['fixed_accounts']['student']['class_start_year'] = target_class_year
         
+        # Fixed student always has 'active' status
         student_rows.append([student_id, person_id, student_code, target_class['class_id'], 'active'])
         
         self.data['students'].append({
@@ -336,12 +371,16 @@ def create_students(self):
             'student_code': student_code,
             'class_id': target_class['class_id'],
             'class_start_year': target_class_year,
+            'enrollment_status': 'active',
             'is_fixed': True
         })
         
         self.add_statement(f"-- Fixed STUDENT assigned to: {target_class['class_name']} (year {target_class_year})")
     else:
         self.add_statement(f"-- WARNING: Could not find class for year {target_class_year}, skipping fixed student")
+    
+    # Track status distribution for logging
+    status_counts = {status: 0 for status, _ in enrollment_statuses}
     
     # Regular students
     for cls in self.data['classes']:
@@ -370,7 +409,12 @@ def create_students(self):
             
             student_id = self.generate_uuid()
             student_code = f"SV{global_counter:06d}"
-            student_rows.append([student_id, person_id, student_code, cls['class_id'], 'active'])
+            
+            # Get random enrollment status with weighted distribution
+            enrollment_status = get_random_enrollment_status()
+            status_counts[enrollment_status] += 1
+            
+            student_rows.append([student_id, person_id, student_code, cls['class_id'], enrollment_status])
             
             self.data['students'].append({
                 'student_id': student_id,
@@ -378,13 +422,19 @@ def create_students(self):
                 'student_code': student_code,
                 'class_id': cls['class_id'],
                 'class_start_year': cls['start_year'],
+                'enrollment_status': enrollment_status,
                 'is_fixed': False
             })
             
             global_counter += 1
     
+    # Log statistics
     self.add_statement(f"-- Total students: {len(student_rows)}")
     self.add_statement(f"-- Fixed: 1, Regular: {len(student_rows) - 1}")
+    self.add_statement("-- Enrollment status distribution:")
+    for status, count in status_counts.items():
+        percentage = (count / (len(student_rows) - 1) * 100) if len(student_rows) > 1 else 0
+        self.add_statement(f"--   {status}: {count} ({percentage:.1f}%)")
     
     if person_rows:
         self.bulk_insert('person', 

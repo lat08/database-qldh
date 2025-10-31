@@ -371,7 +371,23 @@ CREATE TABLE subject (
 );
 
 -- ============================================================
--- CLASS
+-- TRAINING SYSTEM (Hệ đào tạo)
+-- ============================================================
+CREATE TABLE training_system (
+    training_system_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    training_system_name NVARCHAR(100) NOT NULL UNIQUE,  -- e.g., Regular, Part-time, Distance, Transfer
+    description NVARCHAR(500),
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1
+);
+
+-- ============================================================
+-- CLASS (Updated)
 -- ============================================================
 CREATE TABLE class (
     class_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
@@ -379,11 +395,12 @@ CREATE TABLE class (
     class_name NVARCHAR(200) NOT NULL,
     department_id UNIQUEIDENTIFIER NOT NULL,
     advisor_instructor_id UNIQUEIDENTIFIER NULL,
+    training_system_id UNIQUEIDENTIFIER NOT NULL,  -- new column
     start_academic_year_id UNIQUEIDENTIFIER NOT NULL,
-    end_academic_year_id UNIQUEIDENTIFIER NULL,
+    end_academic_year_id UNIQUEIDENTIFIER NOT NULL,
     curriculum_desc_pdf NVARCHAR(1000),
     class_status NVARCHAR(20) DEFAULT 'active' CHECK (class_status IN ('active', 'inactive', 'graduated')),
-    
+
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
     created_by UNIQUEIDENTIFIER NULL,
@@ -395,6 +412,8 @@ CREATE TABLE class (
         REFERENCES department(department_id) ON DELETE CASCADE,
     CONSTRAINT FK_class_advisor_instructor FOREIGN KEY (advisor_instructor_id)
         REFERENCES instructor(instructor_id) ON DELETE SET NULL,
+    CONSTRAINT FK_class_training_system FOREIGN KEY (training_system_id)
+        REFERENCES training_system(training_system_id) ON DELETE NO ACTION,
     CONSTRAINT FK_class_start_academic_year FOREIGN KEY (start_academic_year_id) 
         REFERENCES academic_year(academic_year_id) ON DELETE NO ACTION,
     CONSTRAINT FK_class_end_academic_year FOREIGN KEY (end_academic_year_id) 

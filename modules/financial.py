@@ -81,51 +81,43 @@ def create_student_health_insurance(self):
 
 def create_payments(self):
     """
-    UPDATED: Generate payments using NEW schema structure WITHOUT total_amount
-    - payment_enrollment: for course tuition (total calculated from details)
-    - payment_enrollment_detail: individual course payments
-    - payment_insurance: for health insurance
+    Generate payments for ~70% of enrollments (realistic unpaid scenarios)
     """
     self.add_statement("\n-- ==================== PAYMENTS ====================")
-    self.add_statement("-- Creating payments in TWO separate tables:")
-    self.add_statement("-- 1. payment_enrollment + payment_enrollment_detail (course tuition)")
-    self.add_statement("-- 2. payment_insurance (health insurance)")
-    self.add_statement("-- NOTE: total_amount calculated from payment_enrollment_detail")
+    self.add_statement("-- Payment rate: ~70% paid, ~30% unpaid (for testing)")
     
     enrollment_payment_rows = []
     enrollment_detail_rows = []
     insurance_payment_rows = []
     
-    # =========================================================================
-    # 1. COURSE TUITION PAYMENTS (payment_enrollment + payment_enrollment_detail)
-    # =========================================================================
-    self.add_statement("\n-- Generating course tuition payments...")
+    ENROLLMENT_PAYMENT_RATE = 0.70
+    INSURANCE_PAYMENT_RATE = 0.90
     
     # Group enrollments by student and semester
     enrollments_by_student_semester = defaultdict(list)
     for enrollment in self.data.get('enrollments', []):
         if enrollment.get('status') in ['completed', 'registered']:
-            # Get course info to find semester
             course_class = next((cc for cc in self.data['course_classes'] 
                             if cc['course_class_id'] == enrollment['course_class_id']), None)
             if course_class:
                 key = (enrollment['student_id'], course_class['semester_id'])
                 enrollments_by_student_semester[key].append(enrollment)
     
-    self.add_statement(f"-- Found {len(enrollments_by_student_semester)} unique student-semester combinations")
+    total_combinations = len(enrollments_by_student_semester)
+    paid_count = 0
     
-    # Create ONE payment_enrollment per student per semester
     for (student_id, semester_id), enrollments in enrollments_by_student_semester.items():
+        # Random decision: should this student-semester have payment?
+        if random.random() > ENROLLMENT_PAYMENT_RATE:
+            continue
+        
+        paid_count += 1
         payment_id = self.generate_uuid()
         
-        # Payment date: shortly after first enrollment date
         first_enrollment_date = min(e['enrollment_date'] for e in enrollments)
         payment_date = first_enrollment_date + timedelta(days=random.randint(1, 15))
-        
-        # Transaction reference (bank transfer code, etc.)
         transaction_ref = f"TXN{random.randint(100000000, 999999999)}"
         
-        # Insert payment_enrollment (WITHOUT total_amount)
         enrollment_payment_rows.append([
             payment_id,
             student_id,
@@ -136,10 +128,8 @@ def create_payments(self):
             f'Thanh toán học phí học kỳ'
         ])
         
-        # Create payment_enrollment_detail for EACH enrollment
         for enr in enrollments:
             detail_id = self.generate_uuid()
-            
             course = next((c for c in self.data['courses'] 
                         if c['course_id'] == enr['course_id']), None)
             
@@ -155,19 +145,21 @@ def create_payments(self):
                     amount_paid
                 ])
     
-    self.add_statement(f"-- Total payment_enrollment records: {len(enrollment_payment_rows)}")
-    self.add_statement(f"-- Total payment_enrollment_detail records: {len(enrollment_detail_rows)}")
+    self.add_statement(f"-- Enrollment payments: {paid_count}/{total_combinations} ({paid_count/total_combinations*100:.1f}%)")
     
-    # =========================================================================
-    # 2. HEALTH INSURANCE PAYMENTS (payment_insurance)
-    # =========================================================================
-    self.add_statement("\n-- Generating health insurance payments...")
+    # Insurance payments
+    insurance_paid_count = 0
+    insurance_total = 0
     
     for insurance in self.data.get('insurances', []):
         if insurance.get('should_have_payment', False):
-            payment_id = self.generate_uuid()
+            insurance_total += 1
             
-            # Payment date: before start date
+            if random.random() > INSURANCE_PAYMENT_RATE:
+                continue
+            
+            insurance_paid_count += 1
+            payment_id = self.generate_uuid()
             payment_date = insurance['start_date'] - timedelta(days=random.randint(7, 30))
             
             insurance_payment_rows.append([
@@ -177,30 +169,23 @@ def create_payments(self):
                 'Thanh toán bảo hiểm y tế sinh viên'
             ])
     
-    self.add_statement(f"-- Total insurance payments: {len(insurance_payment_rows)}")
+    if insurance_total > 0:
+        self.add_statement(f"-- Insurance payments: {insurance_paid_count}/{insurance_total} ({insurance_paid_count/insurance_total*100:.1f}%)")
     
-    # =========================================================================
-    # INSERT INTO DATABASE
-    # =========================================================================
-    
-    # Insert payment_enrollment (WITHOUT total_amount column)
     self.bulk_insert('payment_enrollment',
                     ['payment_id', 'student_id', 'semester_id', 'payment_date', 
                     'transaction_reference', 'payment_status', 'notes'],
                     enrollment_payment_rows)
     
-    # Insert payment_enrollment_detail
     self.bulk_insert('payment_enrollment_detail',
                     ['payment_enrollment_detail_ID', 'payment_id', 'enrollment_id', 
                     'amount_paid'],
                     enrollment_detail_rows)
     
-    # Insert payment_insurance
     self.bulk_insert('payment_insurance',
                     ['payment_id', 'insurance_id', 'payment_date', 'notes'],
                     insurance_payment_rows)
-
-
+    
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_student_health_insurance = create_student_health_insurance
 SQLDataGenerator.create_payments = create_payments
