@@ -314,7 +314,7 @@ CREATE TABLE instructor (
     instructor_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     person_id UNIQUEIDENTIFIER NOT NULL UNIQUE,
     instructor_code NVARCHAR(50) NOT NULL UNIQUE,
-    degree NVARCHAR(200),
+    degree NVARCHAR(50) CHECK (degree IN ('PhD', 'Master', 'Bachelor', 'Engineer', NULL)),
     specialization NVARCHAR(500),
     department_id UNIQUEIDENTIFIER NULL,
     hire_date DATE,
@@ -428,7 +428,7 @@ CREATE TABLE student (
     person_id UNIQUEIDENTIFIER NOT NULL UNIQUE,
     student_code NVARCHAR(50) NOT NULL UNIQUE,
     class_id UNIQUEIDENTIFIER NULL,
-    enrollment_status NVARCHAR(20) DEFAULT 'active' CHECK (enrollment_status IN ('active', 'inactive', 'graduated', 'dropped_out', 'suspended')),
+    enrollment_status NVARCHAR(20) DEFAULT 'active' CHECK (enrollment_status IN ('active', 'inactive', 'qualified', 'graduated', 'dropped_out', 'suspended')),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,

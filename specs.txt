@@ -58,8 +58,8 @@ date_of_birth: 1985-03-20
 phone_number: 0907654321
 citizen_id: 009876543210
 address: 456 Đường XYZ, Quận 3, TP Hồ Chí Minh
-degree: Tiến sĩ
-specialization: Công nghệ thông tin
+degree: PhD
+specialization: Computer Science
 hire_date: 2015-09-01
 
 # ============================================================

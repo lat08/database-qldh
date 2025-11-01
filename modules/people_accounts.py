@@ -280,7 +280,7 @@ def create_regular_staff(self):
                         instructor_role_id, 'instructor', 'active'])
         
         instructor_id = self.generate_uuid()
-        degree = random.choice(['Tiến sĩ', 'Thạc sĩ', 'Cử nhân'])
+        degree = random.choice(['PhD', 'Master', 'Bachelor', 'Engineer'])
         specialization = random.choice(['Công nghệ thông tin', 'Kinh tế', 'Kỹ thuật', 'Khoa học'])
         hire_date = date(random.randint(2010, 2020), random.randint(1, 12), 1)
         instructor_rows.append([instructor_id, person_id, f"GV{i+1:04d}", degree, 
