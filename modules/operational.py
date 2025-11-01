@@ -337,9 +337,98 @@ def create_regulations(self):
     else:
         self.add_statement("-- WARNING: No regulations to insert!")
 
+def create_notes(self):
+    """Generate notes for all users (students, instructors, admins)"""
+    self.add_statement("\n-- ==================== NOTES ====================")
+    
+    import random
+    from datetime import datetime, timedelta
+    
+    note_rows = []
+    note_types = ['exam', 'homework', 'schedule', 'personal', 'reminder', 'announcement']
+    
+    # Sample note content templates
+    note_contents = {
+        'exam': [
+            'Ôn tập chương 3: Cấu trúc dữ liệu và giải thuật',
+            'Chuẩn bị tài liệu cho kỳ thi giữa kỳ môn Lập trình',
+            'Lưu ý: Kỳ thi cuối kỳ sẽ thi trên máy tính',
+            'Ôn lại các bài tập đã làm trên lớp',
+            'Xem lại slide bài giảng về OOP',
+        ],
+        'homework': [
+            'Hoàn thành bài tập lập trình tuần 5',
+            'Nộp báo cáo project môn Cơ sở dữ liệu',
+            'Làm bài tập về nhà phần Mạng máy tính',
+            'Chuẩn bị thuyết trình nhóm',
+            'Đọc tài liệu chương 4 trước buổi học',
+        ],
+        'schedule': [
+            'Lịch học thay đổi: Thứ 3 sang Thứ 5 cùng giờ',
+            'Buổi học bù: Thứ 7 tuần sau lúc 8:00',
+            'Nhắc nhở: Họp lớp vào thứ 6 này',
+            'Lớp học chuyển sang phòng B201',
+            'Giảng viên nghỉ buổi học tuần này',
+        ],
+        'personal': [
+            'Ghi chú: Cần mua thêm giáo trình',
+            'Nhớ in tài liệu cho bài thuyết trình',
+            'Mục tiêu: Hoàn thành 3 chương ôn tập',
+            'Cần liên hệ nhóm để bàn về project',
+            'Đăng ký môn học kỳ sau',
+        ],
+        'reminder': [
+            'Nhắc nhở: Deadline nộp bài tuần sau',
+            'Đừng quên mang theo USB đến lớp',
+            'Nhớ đóng học phí trước ngày 15',
+            'Cần nộp đơn xin học bổng',
+            'Nhắc: Meeting với advisor vào thứ 4',
+        ],
+        'announcement': [
+            'Thông báo: Lịch thi đã được cập nhật',
+            'Lưu ý từ giảng viên: Thay đổi tiêu chí chấm điểm',
+            'Cập nhật mới: Tài liệu bài giảng đã đăng',
+            'Thông báo nghỉ học do thời tiết xấu',
+            'Trường tổ chức hội thảo chuyên ngành',
+        ]
+    }
+    
+    # Collect all user_ids from fixed accounts
+    all_user_ids = []
+    for account_key, account_data in self.data['fixed_accounts'].items():
+        if 'user_id' in account_data:
+            all_user_ids.append(account_data['user_id'])
+    
+    if not all_user_ids:
+        self.add_statement("-- WARNING: No user accounts found for note generation")
+        return
+    
+    # Generate 2-5 notes per user with random dates in the past 90 days
+    for user_id in all_user_ids:
+        num_notes = random.randint(2, 5)
+        for _ in range(num_notes):
+            note_id = self.generate_uuid()
+            note_type = random.choice(note_types)
+            content = random.choice(note_contents[note_type])
+            
+            # Random date within last 90 days
+            days_ago = random.randint(0, 90)
+            created_at = datetime.now() - timedelta(days=days_ago)
+            
+            note_rows.append([note_id, user_id, content, note_type, created_at])
+    
+    if note_rows:
+        self.bulk_insert('note',
+                        ['note_id', 'user_id', 'content', 'note_type', 'created_at'],
+                        note_rows)
+        
+        self.add_statement(f"-- Generated {len(note_rows)} notes for {len(all_user_ids)} users")
+    else:
+        self.add_statement("-- No notes generated")
 
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_schedule_changes = create_schedule_changes
 SQLDataGenerator.create_notifications = create_notifications
 SQLDataGenerator.create_documents = create_documents
 SQLDataGenerator.create_regulations = create_regulations
+SQLDataGenerator.create_notes = create_notes

@@ -452,7 +452,7 @@ students_per_class: 30
 # INSTRUCTORS & ADMINS
 # ============================================================
 [staff]
-regular_instructors: 12
+regular_instructors: 30
 # No regular admins - only 5 fixed admin accounts
 
 # ============================================================

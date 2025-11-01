@@ -13,29 +13,65 @@ def create_faculties_and_departments(self):
         fac_name, fac_code, dept_names = parts[0], parts[1], [d.strip() for d in parts[2].split(',')]
         
         faculty_id = self.generate_uuid()
-        dean_id = random.choice(self.data['instructors'])['instructor_id']
+        # Dean will be assigned randomly from instructors
+        dean_id = random.choice(self.data['instructors'])['instructor_id'] if self.data['instructors'] else None
         
-        self.data['faculties'].append({'faculty_id': faculty_id, 'faculty_name': fac_name, 'faculty_code': fac_code})
-        # FIXED: Changed 'status' to 'faculty_status'
+        self.data['faculties'].append({
+            'faculty_id': faculty_id, 
+            'faculty_name': fac_name, 
+            'faculty_code': fac_code
+        })
+        
         faculty_rows.append([faculty_id, fac_name, fac_code, dean_id, 'active'])
         
+        # Create departments under this faculty (no head_id needed)
         for idx, dept_name in enumerate(dept_names):
             dept_id = self.generate_uuid()
             dept_code = f"{fac_code}D{idx+1}"
-            head_id = random.choice(self.data['instructors'])['instructor_id']
             
             self.data['departments'].append({
                 'department_id': dept_id,
                 'department_name': dept_name,
+                'department_code': dept_code,
                 'faculty_id': faculty_id
             })
-            # FIXED: Removed 'status' column (doesn't exist in new schema)
-            department_rows.append([dept_id, dept_name, dept_code, faculty_id, head_id])
+            
+            department_rows.append([dept_id, dept_name, dept_code, faculty_id])
     
-    # FIXED: Changed 'status' to 'faculty_status'
-    self.bulk_insert('faculty', ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'faculty_status'], faculty_rows)
-    # FIXED: Removed 'status' column
-    self.bulk_insert('department', ['department_id', 'department_name', 'department_code', 'faculty_id', 'head_of_department_id'], department_rows)
+    # Insert faculties
+    self.bulk_insert('faculty', 
+                    ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'faculty_status'], 
+                    faculty_rows)
+    
+    # Insert departments (no head_of_department_id)
+    self.bulk_insert('department', 
+                    ['department_id', 'department_name', 'department_code', 'faculty_id'], 
+                    department_rows)
+
+
+def update_instructor_faculty_assignments(self):
+    """Assign instructors to faculties after faculties are created"""
+    self.add_statement("\n-- ==================== ASSIGNING INSTRUCTORS TO FACULTIES ====================")
+    
+    if not self.data['faculties'] or not self.data['instructors']:
+        self.add_statement("-- WARNING: No faculties or instructors available for assignment")
+        return
+    
+    update_statements = []
+    
+    # Assign each instructor to a random faculty
+    for instructor in self.data['instructors']:
+        faculty = random.choice(self.data['faculties'])
+        update_statements.append(
+            f"UPDATE instructor SET faculty_id = '{faculty['faculty_id']}' "
+            f"WHERE instructor_id = '{instructor['instructor_id']}';"
+        )
+    
+    # Execute updates
+    for stmt in update_statements:
+        self.add_statement(stmt)
+    
+    self.add_statement(f"-- Assigned {len(update_statements)} instructors to faculties")
 
 def create_academic_years_and_semesters(self):
     self.add_statement("\n-- ==================== ACADEMIC YEARS & SEMESTERS ====================")
@@ -260,8 +296,10 @@ def map_class_curricula(self):
         
         self.add_statement(f"-- {cls['class_code']}: {len(curriculum_subjects)} subjects mapped")
 
+# Register the updated functions
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_faculties_and_departments = create_faculties_and_departments
+SQLDataGenerator.update_instructor_faculty_assignments = update_instructor_faculty_assignments
 SQLDataGenerator.create_training_systems = create_training_systems
 SQLDataGenerator.create_academic_years_and_semesters = create_academic_years_and_semesters
 SQLDataGenerator.create_classes = create_classes

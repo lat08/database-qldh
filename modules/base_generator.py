@@ -116,25 +116,26 @@ class SQLDataGenerator:
         self.create_roles_and_permissions()
         
         # =========================================================================
-        # PHASE 2: PEOPLE & ACCOUNTS
+        # PHASE 2: ORGANIZATIONAL STRUCTURE (MOVED UP - MUST CREATE BEFORE STAFF)
         # =========================================================================
         self.add_statement("\n-- =========================================================================")
-        self.add_statement("-- PHASE 2: PEOPLE & ACCOUNTS")
-        self.add_statement("-- =========================================================================")
-        
-        self.create_fixed_test_accounts()
-        self.create_regular_staff()
-        
-        # =========================================================================
-        # PHASE 3: ORGANIZATIONAL STRUCTURE
-        # =========================================================================
-        self.add_statement("\n-- =========================================================================")
-        self.add_statement("-- PHASE 3: ORGANIZATIONAL STRUCTURE")
+        self.add_statement("-- PHASE 2: ORGANIZATIONAL STRUCTURE")
         self.add_statement("-- =========================================================================")
         
         self.create_training_systems()
         self.create_faculties_and_departments()
         self.create_academic_years_and_semesters()
+        
+        # =========================================================================
+        # PHASE 3: PEOPLE & ACCOUNTS (MOVED DOWN - AFTER FACULTIES EXIST)
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 3: PEOPLE & ACCOUNTS")
+        self.add_statement("-- =========================================================================")
+        
+        self.create_fixed_test_accounts()
+        self.create_regular_staff()
+        self.assign_faculty_deans()
         
         # =========================================================================
         # PHASE 4: PHYSICAL INFRASTRUCTURE
@@ -200,6 +201,7 @@ class SQLDataGenerator:
         
         self.create_schedule_changes()
         self.create_notifications()
+        self.create_notes()
         
         # =========================================================================
         # PHASE 10: REGULATIONS & POLICIES

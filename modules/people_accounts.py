@@ -109,13 +109,16 @@ def create_fixed_test_accounts(self):
                 'active'
             ])
             
+            # Assign to a random faculty
+            faculty_id = random.choice(self.data['faculties'])['faculty_id'] if self.data['faculties'] else None
+            
             instructor_rows.append([
                 instructor_id, 
                 person_id, 
                 instructor_config.get('instructor_code'),
                 instructor_config.get('degree'), 
                 instructor_config.get('specialization'),
-                None,
+                faculty_id,
                 instructor_config.get('hire_date'), 
                 'active'
             ])
@@ -232,9 +235,10 @@ def create_fixed_test_accounts(self):
                     user_rows)
     
     if instructor_rows:
+        # FIXED: Changed column name from 'department_id' to 'faculty_id'
         self.bulk_insert('instructor', 
                         ['instructor_id', 'person_id', 'instructor_code', 'degree', 
-                        'specialization', 'department_id', 'hire_date', 'employment_status'], 
+                        'specialization', 'faculty_id', 'hire_date', 'employment_status'], 
                         instructor_rows)
     
     if admin_rows:
@@ -283,8 +287,12 @@ def create_regular_staff(self):
         degree = random.choice(['PhD', 'Master', 'Bachelor', 'Engineer'])
         specialization = random.choice(['Công nghệ thông tin', 'Kinh tế', 'Kỹ thuật', 'Khoa học'])
         hire_date = date(random.randint(2010, 2020), random.randint(1, 12), 1)
+        
+        # Assign to a random faculty
+        faculty_id = random.choice(self.data['faculties'])['faculty_id'] if self.data['faculties'] else None
+        
         instructor_rows.append([instructor_id, person_id, f"GV{i+1:04d}", degree, 
-                            specialization, None, hire_date, 'active'])
+                            specialization, faculty_id, hire_date, 'active'])
         
         self.data['instructors'].append({
             'instructor_id': instructor_id, 
@@ -302,9 +310,10 @@ def create_regular_staff(self):
                     'role_id', 'role_name', 'account_status'], 
                     user_rows)
     
+    # FIXED: Changed column name from 'department_id' to 'faculty_id'
     self.bulk_insert('instructor', 
                     ['instructor_id', 'person_id', 'instructor_code', 'degree', 
-                    'specialization', 'department_id', 'hire_date', 'employment_status'], 
+                    'specialization', 'faculty_id', 'hire_date', 'employment_status'], 
                     instructor_rows)
 
 
@@ -454,7 +463,82 @@ def create_students(self):
                         student_rows)
 
 
+def create_faculties_and_departments(self):
+    self.add_statement("\n-- ==================== FACULTIES & DEPARTMENTS ====================")
+    self.add_statement("-- NOTE: Faculties created WITHOUT deans first, deans assigned later")
+    
+    faculty_rows = []
+    department_rows = []
+    
+    for line in self.spec_data.get('faculties', []):
+        parts = [p.strip() for p in line.split('|')]
+        fac_name, fac_code, dept_names = parts[0], parts[1], [d.strip() for d in parts[2].split(',')]
+        
+        faculty_id = self.generate_uuid()
+        
+        self.data['faculties'].append({
+            'faculty_id': faculty_id, 
+            'faculty_name': fac_name, 
+            'faculty_code': fac_code
+        })
+        
+        # Create faculty WITHOUT dean_id (will be assigned after instructors exist)
+        faculty_rows.append([faculty_id, fac_name, fac_code, None, 'active'])
+        
+        # Create departments under this faculty (no head_id needed)
+        for idx, dept_name in enumerate(dept_names):
+            dept_id = self.generate_uuid()
+            dept_code = f"{fac_code}D{idx+1}"
+            
+            self.data['departments'].append({
+                'department_id': dept_id,
+                'department_name': dept_name,
+                'department_code': dept_code,
+                'faculty_id': faculty_id
+            })
+            
+            department_rows.append([dept_id, dept_name, dept_code, faculty_id])
+    
+    # Insert faculties
+    self.bulk_insert('faculty', 
+                    ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'faculty_status'], 
+                    faculty_rows)
+    
+    # Insert departments (no head_of_department_id)
+    self.bulk_insert('department', 
+                    ['department_id', 'department_name', 'department_code', 'faculty_id'], 
+                    department_rows)
+
+
+def assign_faculty_deans(self):
+    """Assign deans to faculties after instructors are created and assigned"""
+    self.add_statement("\n-- ==================== ASSIGNING DEANS TO FACULTIES ====================")
+    
+    if not self.data['faculties'] or not self.data['instructors']:
+        self.add_statement("-- WARNING: No faculties or instructors available for dean assignment")
+        return
+    
+    update_statements = []
+    
+    # Assign a random instructor as dean for each faculty
+    for faculty in self.data['faculties']:
+        dean = random.choice(self.data['instructors'])
+        update_statements.append(
+            f"UPDATE faculty SET dean_id = '{dean['instructor_id']}' "
+            f"WHERE faculty_id = '{faculty['faculty_id']}';"
+        )
+    
+    # Execute updates
+    for stmt in update_statements:
+        self.add_statement(stmt)
+    
+    self.add_statement(f"-- Assigned deans to {len(update_statements)} faculties")
+
+
+# Register all updated functions
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_fixed_test_accounts = create_fixed_test_accounts
 SQLDataGenerator.create_regular_staff = create_regular_staff
 SQLDataGenerator.create_students = create_students
+SQLDataGenerator.create_faculties_and_departments = create_faculties_and_departments
+SQLDataGenerator.assign_faculty_deans = assign_faculty_deans

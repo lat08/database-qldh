@@ -105,6 +105,35 @@ CREATE TABLE user_account (
 );
 
 -- ============================================================
+-- NOTE (Ghi chú/Thông báo)
+-- ============================================================
+CREATE TABLE note (
+    note_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    -- Changed to user_id to align with user_account table's primary key name
+    user_id UNIQUEIDENTIFIER NOT NULL, 
+    content NVARCHAR(MAX) NOT NULL,
+    -- Type of the note (e.g., exam, homework, schedule, personal, reminder)
+    note_type NVARCHAR(50) NOT NULL CHECK (note_type IN (
+        'exam', 
+        'homework', 
+        'schedule', 
+        'personal', 
+        'reminder', 
+        'announcement'
+    )),
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_note_user_account FOREIGN KEY (user_id)
+        REFERENCES user_account(user_id) ON DELETE CASCADE
+);
+
+-- ============================================================
 -- OTP & REFRESH TOKEN
 -- ============================================================
 CREATE TABLE user_otp (
@@ -294,7 +323,6 @@ CREATE TABLE department (
     department_name NVARCHAR(200) NOT NULL,
     department_code NVARCHAR(50) NOT NULL UNIQUE,
     faculty_id UNIQUEIDENTIFIER NOT NULL,
-    head_of_department_id UNIQUEIDENTIFIER NULL,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -314,9 +342,9 @@ CREATE TABLE instructor (
     instructor_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     person_id UNIQUEIDENTIFIER NOT NULL UNIQUE,
     instructor_code NVARCHAR(50) NOT NULL UNIQUE,
-    degree NVARCHAR(50) CHECK (degree IN ('PhD', 'Master', 'Bachelor', 'Engineer', NULL)),
+    degree NVARCHAR(50) CHECK (degree IN ('PhD', 'Master', 'Bachelor', 'Engineer')),
     specialization NVARCHAR(500),
-    department_id UNIQUEIDENTIFIER NULL,
+    faculty_id UNIQUEIDENTIFIER NULL,
     hire_date DATE,
     employment_status NVARCHAR(20) DEFAULT 'active' CHECK (employment_status IN ('active', 'inactive', 'retired', 'on_leave')),
 
@@ -329,18 +357,14 @@ CREATE TABLE instructor (
 
     CONSTRAINT FK_instructor_person FOREIGN KEY (person_id)
         REFERENCES person(person_id) ON DELETE CASCADE,
-    CONSTRAINT FK_instructor_department FOREIGN KEY (department_id) 
-        REFERENCES department(department_id) ON DELETE SET NULL
+    CONSTRAINT FK_instructor_faculty FOREIGN KEY (faculty_id) 
+        REFERENCES faculty(faculty_id) ON DELETE SET NULL
 );
 
 -- Add circular foreign keys
 ALTER TABLE faculty 
     ADD CONSTRAINT FK_faculty_dean_instructor 
     FOREIGN KEY (dean_id) REFERENCES instructor(instructor_id) ON DELETE SET NULL;
-
-ALTER TABLE department 
-    ADD CONSTRAINT FK_department_head_instructor 
-    FOREIGN KEY (head_of_department_id) REFERENCES instructor(instructor_id) ON DELETE SET NULL;
 
 -- ============================================================
 -- SUBJECT
