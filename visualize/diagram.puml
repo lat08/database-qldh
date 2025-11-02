@@ -12,21 +12,24 @@ skinparam class {
 ' Level 0 tables
 class curriculum_detail {
   curriculum_detail_id
-  department_id
+  curriculum_id
   subject_id
-  semester_id
+  academic_year_index
+  semester_index
+  subject_type
+  minimum_passing_grade
 }
 class department {
   department_id
   department_name
   department_code
   faculty_id
-  head_of_department_id
 }
 class document {
   document_id
   course_class_id
   file_name
+  document_type
   file_path
   file_type
   file_size
@@ -65,6 +68,12 @@ class faculty {
   dean_id
   faculty_status
 }
+class note {
+  note_id
+  user_id
+  content
+  note_type
+}
 class notification_schedule {
   schedule_id
   notification_type
@@ -77,17 +86,14 @@ class notification_schedule {
   target_id
   created_by_user
   status
+  event_location
+  event_start_date
 }
 class payment_enrollment_detail {
   payment_enrollment_detail_ID
   payment_id
   enrollment_id
   amount_paid
-}
-class payment_group {
-  id
-  student_course_ids
-  status
 }
 class payment_insurance {
   payment_id
@@ -136,6 +142,7 @@ class room_booking {
   end_time
   booked_by
   purpose
+  student_count
   booking_status
 }
 class schedule_change {
@@ -265,6 +272,7 @@ class user_account {
   password_hash
   password_salt
   role_id
+  role_name
   email_verified
   email_verification_code
   account_status
@@ -305,8 +313,10 @@ class class {
   class_name
   department_id
   advisor_instructor_id
+  training_system_id
   start_academic_year_id
   end_academic_year_id
+  curriculum_id
   curriculum_desc_pdf
   class_status
 }
@@ -336,13 +346,23 @@ class building {
   address
   building_status
 }
+class curriculum {
+  curriculum_id
+  curriculum_code
+  curriculum_name
+  faculty_id
+  total_credits
+  applied_year
+  version_number
+  curriculum_status
+}
 class instructor {
   instructor_id
   person_id
   instructor_code
   degree
   specialization
-  department_id
+  faculty_id
   hire_date
   employment_status
 }
@@ -356,6 +376,11 @@ class semester {
   registration_start_date
   registration_end_date
   semester_status
+}
+class training_system {
+  training_system_id
+  training_system_name
+  description
 }
 
 ' Level 5 tables
@@ -383,6 +408,7 @@ role <-- role_permission
 permission <-- role_permission
 person <-- user_account
 role <-- user_account
+user_account <-- note
 user_account <-- user_otp
 user_account <-- user_refresh_token
 building <-- room
@@ -391,17 +417,19 @@ room_amenity <-- room_amenity_mapping
 academic_year <-- semester
 faculty <-- department
 person <-- instructor
-department <-- instructor
+faculty <-- instructor
 department <-- subject
 department <-- class
 instructor <-- class
+training_system <-- class
 academic_year <-- class
+curriculum <-- class
 person <-- student
 class <-- student
 person <-- admin
-department <-- curriculum_detail
+faculty <-- curriculum
+curriculum <-- curriculum_detail
 subject <-- curriculum_detail
-semester <-- curriculum_detail
 subject <-- course
 semester <-- course
 course <-- course_class

@@ -4,7 +4,7 @@ from collections import defaultdict
 # ============================================================
 # FILE PATHS - CONFIGURE THESE
 # ============================================================
-INPUT_SQL_FILE = r'database-qldh\database.sql'
+INPUT_SQL_FILE = r'database-qldh\sql\database.sql'
 OUTPUT_PLANTUML_FILE = r'database-qldh\visualize\diagram.puml'
 
 # ============================================================
@@ -158,6 +158,6 @@ if __name__ == "__main__":
         puml = generate_plantuml(tables, rels)
         with open(OUTPUT_PLANTUML_FILE, 'w', encoding='utf-8') as f:
             f.write(puml)
-        print("✓ Root tables now appear at the top.")
+        print("✓ Done.")
     except Exception as e:
         print("✗ Error:", e)

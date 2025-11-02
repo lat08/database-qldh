@@ -13,7 +13,6 @@ def create_faculties_and_departments(self):
         fac_name, fac_code, dept_names = parts[0], parts[1], [d.strip() for d in parts[2].split(',')]
         
         faculty_id = self.generate_uuid()
-        # Dean will be assigned randomly from instructors
         dean_id = random.choice(self.data['instructors'])['instructor_id'] if self.data['instructors'] else None
         
         self.data['faculties'].append({
@@ -24,7 +23,6 @@ def create_faculties_and_departments(self):
         
         faculty_rows.append([faculty_id, fac_name, fac_code, dean_id, 'active'])
         
-        # Create departments under this faculty (no head_id needed)
         for idx, dept_name in enumerate(dept_names):
             dept_id = self.generate_uuid()
             dept_code = f"{fac_code}D{idx+1}"
@@ -38,28 +36,22 @@ def create_faculties_and_departments(self):
             
             department_rows.append([dept_id, dept_name, dept_code, faculty_id])
     
-    # Insert faculties
     self.bulk_insert('faculty', 
                     ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'faculty_status'], 
                     faculty_rows)
     
-    # Insert departments (no head_of_department_id)
     self.bulk_insert('department', 
                     ['department_id', 'department_name', 'department_code', 'faculty_id'], 
                     department_rows)
 
-
 def update_instructor_faculty_assignments(self):
-    """Assign instructors to faculties after faculties are created"""
     self.add_statement("\n-- ==================== ASSIGNING INSTRUCTORS TO FACULTIES ====================")
     
     if not self.data['faculties'] or not self.data['instructors']:
-        self.add_statement("-- WARNING: No faculties or instructors available for assignment")
-        return
+        raise RuntimeError("Cannot assign instructors to faculties: missing faculties or instructors")
     
     update_statements = []
     
-    # Assign each instructor to a random faculty
     for instructor in self.data['instructors']:
         faculty = random.choice(self.data['faculties'])
         update_statements.append(
@@ -67,7 +59,6 @@ def update_instructor_faculty_assignments(self):
             f"WHERE instructor_id = '{instructor['instructor_id']}';"
         )
     
-    # Execute updates
     for stmt in update_statements:
         self.add_statement(stmt)
     
@@ -97,10 +88,8 @@ def create_academic_years_and_semesters(self):
             'end_year': end_year
         })
         
-        # FIXED: Added 'year_name' (required in new schema), changed 'status' to 'academic_year_status'
         ay_rows.append([academic_year_id, year_range, start_date, end_date, status])
         
-        # Generate semesters
         semesters_info = [
             ('fall', f'Học kỳ 1 ({start_year}-{end_year})', date(start_year, 9, 1), date(start_year, 12, 31)),
             ('spring', f'Học kỳ 2 ({start_year}-{end_year})', date(end_year, 1, 1), date(end_year, 5, 31)),
@@ -121,15 +110,19 @@ def create_academic_years_and_semesters(self):
                 'end_date': sem_end
             })
             
-            reg_start = sem_start - timedelta(days=30)
-            reg_end = sem_start - timedelta(days=7)
+            # SPECIAL HANDLING: Spring 2026 registration must cover ALL of November 2025
+            if start_year == 2025 and sem_type == 'spring':
+                # Spring 2026 starts Jan 2026, so registration should be Nov 1 - Dec 15, 2025
+                reg_start = date(2025, 11, 1)
+                reg_end = date(2025, 12, 15)
+            else:
+                # Default: registration starts 30 days before, ends 7 days before
+                reg_start = sem_start - timedelta(days=30)
+                reg_end = sem_start - timedelta(days=7)
             
-            # FIXED: Changed 'status' to 'semester_status'
             sem_rows.append([semester_id, sem_name, academic_year_id, sem_type, sem_start, sem_end, reg_start, reg_end, 'active'])
     
-    # FIXED: Added 'year_name', changed 'status' to 'academic_year_status'
     self.bulk_insert('academic_year', ['academic_year_id', 'year_name', 'start_date', 'end_date', 'academic_year_status'], ay_rows)
-    # FIXED: Changed 'status' to 'semester_status'
     self.bulk_insert('semester', ['semester_id', 'semester_name', 'academic_year_id', 'semester_type', 'start_date', 'end_date', 'registration_start_date', 'registration_end_date', 'semester_status'], sem_rows)
 
 def create_training_systems(self):
@@ -155,13 +148,177 @@ def create_training_systems(self):
                     ['training_system_id', 'training_system_name', 'description'], 
                     training_system_rows)
 
+def create_curricula(self):
+    self.add_statement("\n-- ==================== CURRICULA ====================")
+    
+    curriculum_rows = []
+    admin_id = self.data['fixed_accounts'].get('admin', {}).get('admin_id')
+    
+    for dept in self.data['departments']:
+        for year in range(2021, 2026):
+            curriculum_id = self.generate_uuid()
+            curriculum_code = f"{dept['department_code']}-{year}"
+            curriculum_name = f"Chương trình đào tạo {dept['department_name']} - Khóa {year}"
+            
+            self.data['curricula'].append({
+                'curriculum_id': curriculum_id,
+                'curriculum_code': curriculum_code,
+                'curriculum_name': curriculum_name,
+                'department_id': dept['department_id'],
+                'applied_year': year,
+                'version_number': 1
+            })
+            
+            curriculum_rows.append([
+                curriculum_id,
+                curriculum_code,
+                curriculum_name,
+                dept['department_id'],
+                year,
+                1,
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                None,
+                admin_id,
+                None,
+                0,
+                1
+            ])
+    
+    self.add_statement(f"-- Generated {len(curriculum_rows)} curricula")
+    
+    self.bulk_insert('curriculum',
+                    ['curriculum_id', 'curriculum_code', 'curriculum_name', 'department_id',
+                     'applied_year', 'version_number', 'created_at', 'updated_at',
+                     'created_by', 'updated_by', 'is_deleted', 'is_active'],
+                    curriculum_rows)
+
+def create_curriculum_details(self):
+    """
+    FIXED: Properly validates subject data before attempting to map
+    """
+    self.add_statement("\n-- ==================== CURRICULUM DETAILS ====================")
+    
+    curriculum_detail_rows = []
+    admin_id = self.data['fixed_accounts'].get('admin', {}).get('admin_id')
+    
+    # Validate subjects exist
+    if not self.data.get('subjects'):
+        raise RuntimeError(
+            "CRITICAL ERROR: No subjects found when creating curriculum_details!\n"
+            "create_subjects() must be called BEFORE create_curriculum_details()"
+        )
+    
+    # Validate subject data structure
+    for subject in self.data['subjects']:
+        if 'is_general' not in subject:
+            raise RuntimeError(
+                f"CRITICAL ERROR: Subject {subject.get('subject_code', '?')} missing 'is_general' flag!\n"
+                "Subjects must have is_general=True/False for curriculum mapping to work"
+            )
+    
+    for curriculum in self.data['curricula']:
+        dept_id = curriculum['department_id']
+        
+        # Get subjects for this department
+        dept_subjects = []
+        
+        # Add ALL general subjects (every curriculum needs these)
+        general_subjects = [s for s in self.data['subjects'] if s['is_general'] == True]
+        dept_subjects.extend(general_subjects)
+        
+        # Add specialized subjects for THIS department only
+        specialized_subjects = [s for s in self.data['subjects'] 
+                              if s['is_general'] == False 
+                              and s.get('department_id') == dept_id]
+        dept_subjects.extend(specialized_subjects)
+        
+        if not dept_subjects:
+            raise RuntimeError(
+                f"CRITICAL ERROR: No subjects found for curriculum {curriculum['curriculum_code']}!\n"
+                f"  Department ID: {dept_id}\n"
+                f"  Total subjects in system: {len(self.data['subjects'])}\n"
+                f"  General subjects: {len(general_subjects)}\n"
+                f"  Specialized subjects for this dept: {len(specialized_subjects)}"
+            )
+        
+        # Distribute subjects across 4 years, 2 semesters per year
+        total_subjects = len(dept_subjects)
+        year1_count = int(total_subjects * 0.30)
+        year2_count = int(total_subjects * 0.25)
+        year3_count = int(total_subjects * 0.25)
+        year4_count = total_subjects - year1_count - year2_count - year3_count
+        
+        subject_index = 0
+        
+        year_distributions = [
+            (1, year1_count),
+            (2, year2_count),
+            (3, year3_count),
+            (4, year4_count)
+        ]
+        
+        for academic_year_index, count in year_distributions:
+            semester1_count = int(count * 0.5)
+            semester2_count = count - semester1_count
+            
+            semester_distributions = [
+                (1, semester1_count),
+                (2, semester2_count)
+            ]
+            
+            for semester_index, sem_count in semester_distributions:
+                for _ in range(sem_count):
+                    if subject_index >= total_subjects:
+                        break
+                    
+                    subject = dept_subjects[subject_index]
+                    subject_index += 1
+                    
+                    curriculum_detail_id = self.generate_uuid()
+                    
+                    self.data['curriculum_details'].append({
+                        'curriculum_detail_id': curriculum_detail_id,
+                        'curriculum_id': curriculum['curriculum_id'],
+                        'subject_id': subject['subject_id'],
+                        'academic_year_index': academic_year_index,
+                        'semester_index': semester_index
+                    })
+                    
+                    curriculum_detail_rows.append([
+                        curriculum_detail_id,
+                        curriculum['curriculum_id'],
+                        subject['subject_id'],
+                        academic_year_index,
+                        semester_index,
+                        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        None,
+                        admin_id,
+                        None,
+                        0,
+                        1
+                    ])
+    
+    if len(curriculum_detail_rows) == 0:
+        raise RuntimeError(
+            "CRITICAL ERROR: No curriculum_details created!\n"
+            "This will cause enrollment creation to fail"
+        )
+    
+    self.add_statement(f"-- Generated {len(curriculum_detail_rows)} curriculum details")
+    
+    self.bulk_insert('curriculum_detail',
+                    ['curriculum_detail_id', 'curriculum_id', 'subject_id',
+                     'academic_year_index', 'semester_index',
+                     'created_at', 'updated_at', 'created_by', 'updated_by',
+                     'is_deleted', 'is_active'],
+                    curriculum_detail_rows)
+
 def create_classes(self):
     self.add_statement("\n-- ==================== CLASSES ====================")
     
     class_rows = []
     class_names = set()
     
-    # Build training system lookup
     training_system_lookup = {ts['training_system_name']: ts['training_system_id'] 
                              for ts in self.data['training_systems']}
     
@@ -175,19 +332,25 @@ def create_classes(self):
             continue
         class_names.add(class_name)
         
-        # Extract year from class name (e.g., K2023-1 -> 2023)
         year = int(class_name[1:5])
         
-        # Find matching academic year, department, and training system
         matching_ay = next((ay for ay in self.data['academic_years'] if ay['start_year'] == year), None)
         matching_dept = next((d for d in self.data['departments'] if d['department_name'] == dept_name), None)
         training_system_id = training_system_lookup.get(training_system_name)
         
         if not matching_ay or not matching_dept or not training_system_id:
-            self.add_statement(f"-- WARNING: Missing data for {class_name}")
             continue
         
-        # Calculate end_academic_year_id (4-year program)
+        matching_curriculum = next(
+            (c for c in self.data['curricula'] 
+             if c['department_id'] == matching_dept['department_id'] 
+             and c['applied_year'] == year),
+            None
+        )
+        
+        if not matching_curriculum:
+            continue
+        
         end_year = year + 4
         end_academic_year = next((ay for ay in self.data['academic_years'] 
                                  if ay['start_year'] == end_year), None)
@@ -207,6 +370,7 @@ def create_classes(self):
             'class_code': class_code,
             'class_name': class_name,
             'department_id': matching_dept['department_id'],
+            'curriculum_id': matching_curriculum['curriculum_id'],
             'training_system_id': training_system_id,
             'start_academic_year_id': matching_ay['academic_year_id'],
             'end_academic_year_id': end_academic_year_id,
@@ -219,7 +383,8 @@ def create_classes(self):
             class_id, 
             class_code, 
             class_name, 
-            matching_dept['department_id'], 
+            matching_dept['department_id'],
+            matching_curriculum['curriculum_id'],
             advisor_id, 
             training_system_id, 
             matching_ay['academic_year_id'],
@@ -231,7 +396,8 @@ def create_classes(self):
         'class_id', 
         'class_code', 
         'class_name', 
-        'department_id', 
+        'department_id',
+        'curriculum_id',
         'advisor_instructor_id', 
         'training_system_id', 
         'start_academic_year_id',
@@ -239,68 +405,12 @@ def create_classes(self):
         'class_status'
     ], class_rows)
 
-# ==================== CURRICULUM MAPPING ====================
-def map_class_curricula(self):
-    self.add_statement("\n-- ==================== MAPPING CLASS CURRICULA ====================")
-    
-    # Build subject code lookup
-    subject_lookup = {s['subject_code']: s for s in self.data['subjects']}
-    general_subject_codes = [s['subject_code'] for s in self.data['subjects'] if s.get('is_general')]
-    
-    self.add_statement(f"-- Total subjects available: {len(subject_lookup)}")
-    self.add_statement(f"-- General subjects: {len(general_subject_codes)}")
-    
-    for cls in self.data['classes']:
-        # Find curriculum line for this class
-        curriculum_line = None
-        for line in self.spec_data.get('class_curricula', []):
-            if line.strip().startswith(cls['class_code']):
-                curriculum_line = line
-                break
-        
-        if not curriculum_line:
-            self.add_statement(f"-- WARNING: No curriculum found for {cls['class_code']}")
-            cls['curriculum'] = []
-            continue
-        
-        parts = [p.strip() for p in curriculum_line.split('|')]
-        if len(parts) < 4:  # Changed from 3 to 4
-            self.add_statement(f"-- WARNING: Invalid curriculum line for {cls['class_code']}")
-            cls['curriculum'] = []
-            continue
-        
-        subject_codes_str = parts[3]  # Changed from parts[2] to parts[3]
-        
-        # Parse subject codes
-        subject_codes = []
-        for code in subject_codes_str.split(','):
-            code = code.strip()
-            if code == '@ALL_GENERAL':
-                subject_codes.extend(general_subject_codes)
-            else:
-                subject_codes.append(code)
-        
-        # Map to subject objects
-        curriculum_subjects = []
-        missing_codes = []
-        for code in subject_codes:
-            if code in subject_lookup:
-                curriculum_subjects.append(subject_lookup[code])
-            else:
-                missing_codes.append(code)
-        
-        cls['curriculum'] = curriculum_subjects
-        
-        if missing_codes:
-            self.add_statement(f"-- WARNING: {cls['class_code']} missing subjects: {', '.join(missing_codes)}")
-        
-        self.add_statement(f"-- {cls['class_code']}: {len(curriculum_subjects)} subjects mapped")
-
-# Register the updated functions
+# Register functions
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_faculties_and_departments = create_faculties_and_departments
 SQLDataGenerator.update_instructor_faculty_assignments = update_instructor_faculty_assignments
 SQLDataGenerator.create_training_systems = create_training_systems
 SQLDataGenerator.create_academic_years_and_semesters = create_academic_years_and_semesters
 SQLDataGenerator.create_classes = create_classes
-SQLDataGenerator.map_class_curricula = map_class_curricula
+SQLDataGenerator.create_curricula = create_curricula
+SQLDataGenerator.create_curriculum_details = create_curriculum_details

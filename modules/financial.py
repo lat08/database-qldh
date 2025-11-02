@@ -68,12 +68,11 @@ def create_student_health_insurance(self):
                     'academic_year_id': ay['academic_year_id'],
                     'fee': insurance_fee,
                     'start_date': start_date,
-                    'should_have_payment': should_have_payment  # Changed from is_paid
+                    'should_have_payment': should_have_payment
                 })
     
     self.add_statement(f"-- Total health insurance records: {len(insurance_rows)}")
     
-    # REMOVED is_paid from column list
     self.bulk_insert('student_health_insurance',
                     ['insurance_id', 'student_id', 'academic_year_id', 'insurance_fee',
                     'start_date', 'end_date', 'insurance_status'],
@@ -93,9 +92,28 @@ def create_payments(self):
     ENROLLMENT_PAYMENT_RATE = 0.70
     INSURANCE_PAYMENT_RATE = 0.90
     
+    # Validate critical data exists
+    total_enrollments = len(self.data.get('enrollments', []))
+    total_course_classes = len(self.data.get('course_classes', []))
+    total_curriculum_details = len(self.data.get('curriculum_details', []))
+    
+    if total_enrollments == 0:
+        raise RuntimeError(
+            f"CRITICAL ERROR: No enrollments found!\n"
+            f"  Total enrollments: {total_enrollments}\n"
+            f"  Total course_classes: {total_course_classes}\n"
+            f"  Total curriculum_details: {total_curriculum_details}\n"
+            f"PROBABLE CAUSES:\n"
+            f"  - curriculum_details is empty (subjects not mapped to curricula)\n"
+            f"  - course_classes is empty (no classes scheduled)\n"
+            f"  - Enrollment logic failed to create any enrollments\n"
+            f"CHECK: create_subjects(), create_curricula(), create_curriculum_details()"
+        )
+    
     # Group enrollments by student and semester
     enrollments_by_student_semester = defaultdict(list)
-    for enrollment in self.data.get('enrollments', []):
+    
+    for enrollment in self.data['enrollments']:
         if enrollment.get('status') in ['completed', 'registered']:
             course_class = next((cc for cc in self.data['course_classes'] 
                             if cc['course_class_id'] == enrollment['course_class_id']), None)
@@ -104,6 +122,16 @@ def create_payments(self):
                 enrollments_by_student_semester[key].append(enrollment)
     
     total_combinations = len(enrollments_by_student_semester)
+    
+    if total_combinations == 0:
+        raise RuntimeError(
+            f"CRITICAL ERROR: No valid student-semester combinations found!\n"
+            f"  Total enrollments exist: {total_enrollments}\n"
+            f"  But no enrollments have matching course_classes\n"
+            f"PROBABLE CAUSE: course_class_id foreign key mismatch\n"
+            f"CHECK: Verify enrollment course_class_ids match actual course_class records"
+        )
+    
     paid_count = 0
     
     for (student_id, semester_id), enrollments in enrollments_by_student_semester.items():
@@ -135,7 +163,7 @@ def create_payments(self):
             
             if course:
                 credits = course.get('credits', 0)
-                fee_per_credit = course.get('fee_per_credit', 600000)
+                fee_per_credit = float(self.course_config.get('fee_per_credit', 600000))
                 amount_paid = credits * fee_per_credit
                 
                 enrollment_detail_rows.append([
@@ -166,6 +194,7 @@ def create_payments(self):
                 payment_id,
                 insurance['insurance_id'],
                 payment_date,
+                'completed',
                 'Thanh toán bảo hiểm y tế sinh viên'
             ])
     
@@ -183,7 +212,7 @@ def create_payments(self):
                     enrollment_detail_rows)
     
     self.bulk_insert('payment_insurance',
-                    ['payment_id', 'insurance_id', 'payment_date', 'notes'],
+                    ['payment_id', 'insurance_id', 'payment_date', 'payment_status', 'notes'],
                     insurance_payment_rows)
     
 from modules.base_generator import SQLDataGenerator

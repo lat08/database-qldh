@@ -1,119 +1,151 @@
-from collections import defaultdict
+import random
+from datetime import datetime
 from .config import *
 
 def create_subjects(self):
+    """
+    Create all subjects from spec (general + specialized)
+    CRITICAL: Must set is_general flag and department_id correctly for curriculum_details to work
+    """
     self.add_statement("\n-- ==================== SUBJECTS ====================")
     
     subject_rows = []
     
-    # Get first department as default for general subjects
-    default_dept_id = self.data['departments'][0]['department_id']
+    # Get admin for created_by
+    admin_id = self.data['fixed_accounts'].get('admin', {}).get('admin_id')
     
-    # General subjects
-    for line in self.spec_data.get('general_subjects', []):
+    # =========================================================================
+    # GENERAL SUBJECTS (no department, is_general = True)
+    # =========================================================================
+    general_subjects = self.spec_data.get('general_subjects', [])
+    
+    self.add_statement(f"-- Creating {len(general_subjects)} general education subjects")
+    
+    for line in general_subjects:
         parts = [p.strip() for p in line.split('|')]
-        subj_name, subj_code, credits, theory, practice = parts
+        if len(parts) < 5:
+            continue
+            
+        subject_name = parts[0]
+        subject_code = parts[1]
+        credits = int(parts[2])
+        theory_hours = int(parts[3])
+        practice_hours = int(parts[4])
         
         subject_id = self.generate_uuid()
         
+        # Store in data with is_general = True and NO department_id
         self.data['subjects'].append({
             'subject_id': subject_id,
-            'subject_code': subj_code,
-            'subject_name': subj_name,
-            'credits': int(credits),
-            'theory_hours': int(theory),
-            'practice_hours': int(practice),
-            'is_general': True
+            'subject_code': subject_code,
+            'subject_name': subject_name,
+            'credits': credits,
+            'theory_hours': theory_hours,
+            'practice_hours': practice_hours,
+            'is_general': True,  # CRITICAL FLAG
+            'department_id': None,  # No department for general subjects
+            'fee_per_credit': float(self.course_config.get('fee_per_credit', 600000))
         })
         
-        # FIXED: Changed 'status' to 'subject_status'
-        subject_rows.append([subject_id, subj_name, subj_code, int(credits), int(theory), int(practice), 
-                        True, default_dept_id, 'active'])
-    
-    # Department subjects
-    for line in self.spec_data.get('department_subjects', []):
-        parts = [p.strip() for p in line.split('|')]
-        dept_name, subj_name, subj_code, credits, theory, practice = parts
+        # Find a random department to assign (for database constraint, but not used in logic)
+        fallback_dept_id = self.data['departments'][0]['department_id'] if self.data['departments'] else None
         
-        # Find department
+        subject_rows.append([
+            subject_id,
+            subject_name,
+            subject_code,
+            credits,
+            theory_hours,
+            practice_hours,
+            1,  # is_general = True
+            fallback_dept_id,  # department_id (required by schema but not logically used)
+            None,  # prerequisite_subject_id
+            'active',
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            None,
+            admin_id,
+            None,
+            0,
+            1
+        ])
+    
+    # =========================================================================
+    # SPECIALIZED SUBJECTS (by department, is_general = False)
+    # =========================================================================
+    department_subjects = self.spec_data.get('department_subjects', [])
+    
+    self.add_statement(f"-- Creating {len(department_subjects)} specialized subjects")
+    
+    for line in department_subjects:
+        parts = [p.strip() for p in line.split('|')]
+        if len(parts) < 6:
+            continue
+            
+        dept_name = parts[0]
+        subject_name = parts[1]
+        subject_code = parts[2]
+        credits = int(parts[3])
+        theory_hours = int(parts[4])
+        practice_hours = int(parts[5])
+        
+        # Find matching department
         dept = next((d for d in self.data['departments'] if d['department_name'] == dept_name), None)
         if not dept:
+            self.add_statement(f"-- WARNING: Department '{dept_name}' not found for subject {subject_code}")
             continue
         
         subject_id = self.generate_uuid()
         
+        # Store in data with is_general = False and correct department_id
         self.data['subjects'].append({
             'subject_id': subject_id,
-            'subject_code': subj_code,
-            'subject_name': subj_name,
-            'credits': int(credits),
-            'theory_hours': int(theory),
-            'practice_hours': int(practice),
-            'is_general': False,
-            'department_id': dept['department_id']
+            'subject_code': subject_code,
+            'subject_name': subject_name,
+            'credits': credits,
+            'theory_hours': theory_hours,
+            'practice_hours': practice_hours,
+            'is_general': False,  # CRITICAL FLAG
+            'department_id': dept['department_id'],  # CRITICAL - must match curriculum department
+            'fee_per_credit': float(self.course_config.get('fee_per_credit', 600000))
         })
         
-        # FIXED: Changed 'status' to 'subject_status'
-        subject_rows.append([subject_id, subj_name, subj_code, int(credits), int(theory), int(practice), 
-                        False, dept['department_id'], 'active'])
+        subject_rows.append([
+            subject_id,
+            subject_name,
+            subject_code,
+            credits,
+            theory_hours,
+            practice_hours,
+            0,  # is_general = False
+            dept['department_id'],
+            None,  # prerequisite_subject_id
+            'active',
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            None,
+            admin_id,
+            None,
+            0,
+            1
+        ])
     
-    # FIXED: Changed 'status' to 'subject_status'
-    self.bulk_insert('subject', ['subject_id', 'subject_name', 'subject_code', 'credits', 'theory_hours', 
-                                'practice_hours', 'is_general', 'department_id', 'subject_status'], subject_rows)
+    self.add_statement(f"-- Total subjects created: {len(subject_rows)}")
+    self.add_statement(f"--   General: {len(general_subjects)}")
+    self.add_statement(f"--   Specialized: {len(department_subjects)}")
+    
+    if len(subject_rows) == 0:
+        raise RuntimeError(
+            "CRITICAL ERROR: No subjects created!\n"
+            "CHECK: Verify [general_subjects] and [department_subjects] sections exist in spec file"
+        )
+    
+    self.bulk_insert('subject',
+                    ['subject_id', 'subject_name', 'subject_code', 'credits',
+                     'theory_hours', 'practice_hours', 'is_general', 'department_id',
+                     'prerequisite_subject_id', 'subject_status',
+                     'created_at', 'updated_at', 'created_by', 'updated_by',
+                     'is_deleted', 'is_active'],
+                    subject_rows)
 
-def create_curriculum_details(self):
-    """
-    UPDATED: curriculum_detail now links department -> subject -> semester
-    NOT class -> subject -> semester
-    """
-    self.add_statement("\n-- ==================== CURRICULUM DETAILS ====================")
-    
-    curriculum_rows = []
-    
-    # Group subjects by department
-    subjects_by_dept = defaultdict(list)
-    for subject in self.data['subjects']:
-        dept_id = subject.get('department_id')
-        if dept_id:
-            subjects_by_dept[dept_id].append(subject)
-    
-    # For each department, distribute subjects across semesters
-    for dept_id, subjects in subjects_by_dept.items():
-        # Get semesters (use recent years)
-        recent_semesters = [s for s in self.data['semesters'] 
-                        if s['start_year'] >= 2023]
-        
-        if not recent_semesters:
-            continue
-        
-        # Distribute subjects across semesters (roughly 5-6 per semester)
-        subjects_per_semester = 6
-        semester_index = 0
-        
-        for i, subject in enumerate(subjects):
-            if semester_index >= len(recent_semesters):
-                semester_index = 0  # Wrap around
-            
-            semester = recent_semesters[semester_index]
-            
-            curriculum_detail_id = self.generate_uuid()
-            curriculum_rows.append([
-                curriculum_detail_id,
-                dept_id,
-                subject['subject_id'],
-                semester['semester_id']
-            ])
-            
-            # Move to next semester after distributing subjects
-            if (i + 1) % subjects_per_semester == 0:
-                semester_index += 1
-    
-    self.add_statement(f"-- Total curriculum details: {len(curriculum_rows)}")
-    
-    self.bulk_insert('curriculum_detail',
-                    ['curriculum_detail_id', 'department_id', 'subject_id', 'semester_id'],
-                    curriculum_rows)
-
+# Register function
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_subjects = create_subjects
-SQLDataGenerator.create_curriculum_details = create_curriculum_details

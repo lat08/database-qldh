@@ -38,6 +38,8 @@ class SQLDataGenerator:
             'fixed_accounts': {},
             'regulations': [],
             'training_systems': [],
+            'curricula': [],
+            'curriculum_details': [],
         }
         
         # Parse spec config
@@ -155,12 +157,12 @@ class SQLDataGenerator:
         self.add_statement("-- PHASE 5: ACADEMIC PROGRAMS")
         self.add_statement("-- =========================================================================")
         
-        self.create_classes()
-        self.create_subjects()
-        self.map_class_curricula()
-        self.create_curriculum_details()
+        self.create_subjects()  # Must come first
+        self.create_curricula()  # NEW: Create curricula after subjects exist
+        self.create_curriculum_details()  # NEW: Map subjects to curricula
+        self.create_classes()  # Now classes can reference curricula
         self.create_students()
-        
+
         # =========================================================================
         # PHASE 6: COURSE OFFERINGS
         # =========================================================================

@@ -105,6 +105,27 @@ CREATE TABLE user_account (
 );
 
 -- ============================================================
+-- ADMIN
+-- ============================================================
+CREATE TABLE admin (
+    admin_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    person_id UNIQUEIDENTIFIER NOT NULL UNIQUE,
+    admin_code NVARCHAR(50) NOT NULL UNIQUE,
+    position NVARCHAR(200),
+    admin_status NVARCHAR(20) DEFAULT 'active' CHECK (admin_status IN ('active', 'inactive')),
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_admin_person FOREIGN KEY (person_id)
+        REFERENCES person(person_id) ON DELETE CASCADE
+);
+
+-- ============================================================
 -- NOTE (Ghi chú/Thông báo)
 -- ============================================================
 CREATE TABLE note (
@@ -410,6 +431,58 @@ CREATE TABLE training_system (
     is_active BIT NOT NULL DEFAULT 1
 );
 
+
+
+-- ============================================================
+-- CURRICULUM (Chương trình Đào tạo - Thực thể chính)
+-- ============================================================
+CREATE TABLE curriculum (
+    curriculum_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    curriculum_code NVARCHAR(50) NOT NULL,
+    curriculum_name NVARCHAR(500) NOT NULL,
+    department_id UNIQUEIDENTIFIER NOT NULL,
+    applied_year INT NOT NULL CHECK (applied_year BETWEEN 1900 AND 2100),
+    version_number INT NOT NULL CHECK (version_number > 0),   -- Bắt buộc > 0
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_curriculum_department FOREIGN KEY (department_id) 
+        REFERENCES department(department_id) ON DELETE NO ACTION,
+
+    -- Mỗi curriculum_code + version_number là duy nhất
+    CONSTRAINT UQ_curriculum_code_version UNIQUE (curriculum_code, version_number)
+);
+
+CREATE TABLE curriculum_detail (
+    curriculum_detail_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    curriculum_id UNIQUEIDENTIFIER NOT NULL,
+    subject_id UNIQUEIDENTIFIER NOT NULL,
+    
+    -- Các trường thể hiện vị trí Môn học trong CTĐT
+    academic_year_index INT NOT NULL CHECK (academic_year_index IN (1, 2, 3, 4)), -- Năm học thứ 1, 2, 3, 4
+    semester_index INT NOT NULL CHECK (semester_index IN (1, 2, 3)),   -- Học kỳ 1, 2, 3... (Giả định có 3 HK/năm)
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_curriculum_detail_curriculum FOREIGN KEY (curriculum_id) 
+        REFERENCES curriculum(curriculum_id) ON DELETE CASCADE,
+    CONSTRAINT FK_curriculum_detail_subject FOREIGN KEY (subject_id) 
+        REFERENCES subject(subject_id) ON DELETE NO ACTION,
+
+    -- Đảm bảo một môn học chỉ xuất hiện một lần trong một CTĐT
+    CONSTRAINT UQ_curriculum_subject UNIQUE (curriculum_id, subject_id)
+);
+
 -- ============================================================
 -- CLASS (Updated)
 -- ============================================================
@@ -424,6 +497,7 @@ CREATE TABLE class (
     end_academic_year_id UNIQUEIDENTIFIER NOT NULL,
     curriculum_desc_pdf NVARCHAR(1000),
     class_status NVARCHAR(20) DEFAULT 'active' CHECK (class_status IN ('active', 'inactive', 'graduated')),
+    curriculum_id UNIQUEIDENTIFIER NULL,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -441,7 +515,9 @@ CREATE TABLE class (
     CONSTRAINT FK_class_start_academic_year FOREIGN KEY (start_academic_year_id) 
         REFERENCES academic_year(academic_year_id) ON DELETE NO ACTION,
     CONSTRAINT FK_class_end_academic_year FOREIGN KEY (end_academic_year_id) 
-        REFERENCES academic_year(academic_year_id) ON DELETE NO ACTION
+        REFERENCES academic_year(academic_year_id) ON DELETE NO ACTION,
+    CONSTRAINT FK_class_curriculum FOREIGN KEY (curriculum_id) 
+        REFERENCES curriculum(curriculum_id) ON DELETE SET NULL 
 );
 
 -- ============================================================
@@ -465,51 +541,6 @@ CREATE TABLE student (
         REFERENCES person(person_id) ON DELETE CASCADE,
     CONSTRAINT FK_student_class FOREIGN KEY (class_id) 
         REFERENCES class(class_id) ON DELETE SET NULL
-);
-
--- ============================================================
--- ADMIN
--- ============================================================
-CREATE TABLE admin (
-    admin_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    person_id UNIQUEIDENTIFIER NOT NULL UNIQUE,
-    admin_code NVARCHAR(50) NOT NULL UNIQUE,
-    position NVARCHAR(200),
-    admin_status NVARCHAR(20) DEFAULT 'active' CHECK (admin_status IN ('active', 'inactive')),
-
-    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at DATETIME2 NULL,
-    created_by UNIQUEIDENTIFIER NULL,
-    updated_by UNIQUEIDENTIFIER NULL,
-    is_deleted BIT NOT NULL DEFAULT 0,
-    is_active BIT NOT NULL DEFAULT 1,
-
-    CONSTRAINT FK_admin_person FOREIGN KEY (person_id)
-        REFERENCES person(person_id) ON DELETE CASCADE
-);
-
--- ============================================================
--- CURRICULUM
--- ============================================================
-CREATE TABLE curriculum_detail (
-    curriculum_detail_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    department_id UNIQUEIDENTIFIER NOT NULL,
-    subject_id UNIQUEIDENTIFIER NOT NULL,
-    semester_id UNIQUEIDENTIFIER NOT NULL,
-
-    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at DATETIME2 NULL,
-    created_by UNIQUEIDENTIFIER NULL,
-    updated_by UNIQUEIDENTIFIER NULL,
-    is_deleted BIT NOT NULL DEFAULT 0,
-    is_active BIT NOT NULL DEFAULT 1,
-
-    CONSTRAINT FK_curriculum_detail_department FOREIGN KEY (department_id) 
-        REFERENCES department(department_id) ON DELETE CASCADE,
-    CONSTRAINT FK_curriculum_detail_subject FOREIGN KEY (subject_id) 
-        REFERENCES subject(subject_id) ON DELETE NO ACTION,
-    CONSTRAINT FK_curriculum_detail_semester FOREIGN KEY (semester_id) 
-        REFERENCES semester(semester_id) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -551,6 +582,14 @@ CREATE TABLE course_class (
     end_period INT NOT NULL CHECK (end_period BETWEEN 1 AND 16),
     course_class_status NVARCHAR(20) DEFAULT 'active' CHECK (course_class_status IN ('active', 'inactive', 'completed', 'cancelled')),
 
+    -- Grade submission workflow
+    grade_submission_status NVARCHAR(50) DEFAULT 'draft' CHECK (grade_submission_status IN ('draft', 'pending', 'approved')),
+    grade_submitted_at DATETIME2 NULL,
+    grade_approved_at DATETIME2 NULL,
+    grade_approved_by UNIQUEIDENTIFIER NULL,    -- Admin duyệt
+    grade_submission_note NVARCHAR(MAX) NULL,   -- Ghi chú khi gửi duyệt
+    grade_approval_note NVARCHAR(MAX) NULL,     -- Ghi chú khi admin duyệt/từ chối
+
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
     created_by UNIQUEIDENTIFIER NULL,
@@ -579,9 +618,16 @@ CREATE TABLE student_enrollment (
     enrollment_status NVARCHAR(20) DEFAULT 'registered' CHECK (enrollment_status IN ('registered', 'dropped', 'completed', 'cancelled')),
     cancellation_date DATE NULL,
     cancellation_reason NVARCHAR(500) NULL,
+
+    -- Official grades
     attendance_grade NUMERIC(4,2) CHECK (attendance_grade BETWEEN 0 AND 10),
     midterm_grade NUMERIC(4,2) CHECK (midterm_grade BETWEEN 0 AND 10),
     final_grade NUMERIC(4,2) CHECK (final_grade BETWEEN 0 AND 10),
+
+    -- Draft grades (for instructors before approval)
+    attendance_grade_draft NUMERIC(4,2) CHECK (attendance_grade_draft BETWEEN 0 AND 10),
+    midterm_grade_draft NUMERIC(4,2) CHECK (midterm_grade_draft BETWEEN 0 AND 10),
+    final_grade_draft NUMERIC(4,2) CHECK (final_grade_draft BETWEEN 0 AND 10),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
