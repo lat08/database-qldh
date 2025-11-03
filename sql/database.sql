@@ -615,25 +615,14 @@ CREATE TABLE student_enrollment (
     student_id UNIQUEIDENTIFIER NOT NULL,
     course_class_id UNIQUEIDENTIFIER NOT NULL,
     enrollment_date DATE DEFAULT GETDATE(),
-    enrollment_status NVARCHAR(20) DEFAULT 'registered' CHECK (enrollment_status IN ('registered', 'dropped', 'completed', 'cancelled')),
+    enrollment_status NVARCHAR(20) DEFAULT 'registered' 
+        CHECK (enrollment_status IN ('registered', 'dropped', 'completed', 'cancelled')),
     cancellation_date DATE NULL,
     cancellation_reason NVARCHAR(500) NULL,
 
-    -- Official grades
-    attendance_grade NUMERIC(4,2) CHECK (attendance_grade BETWEEN 0 AND 10),
-    midterm_grade NUMERIC(4,2) CHECK (midterm_grade BETWEEN 0 AND 10),
-    final_grade NUMERIC(4,2) CHECK (final_grade BETWEEN 0 AND 10),
-
-    -- Draft grades (for instructors before approval)
-    attendance_grade_draft NUMERIC(4,2) CHECK (attendance_grade_draft BETWEEN 0 AND 10),
-    midterm_grade_draft NUMERIC(4,2) CHECK (midterm_grade_draft BETWEEN 0 AND 10),
-    final_grade_draft NUMERIC(4,2) CHECK (final_grade_draft BETWEEN 0 AND 10),
-
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
-    created_by UNIQUEIDENTIFIER NULL,
-    updated_by UNIQUEIDENTIFIER NULL,
-    is_deleted BIT NOT NULL DEFAULT 0,
+	is_deleted BIT NOT NULL DEFAULT 0,
     is_active BIT NOT NULL DEFAULT 1,
 
     CONSTRAINT UQ_student_enrollment_course_class UNIQUE (student_id, course_class_id),
@@ -641,6 +630,89 @@ CREATE TABLE student_enrollment (
         REFERENCES student(student_id) ON DELETE CASCADE,
     CONSTRAINT FK_student_enrollment_course_class FOREIGN KEY (course_class_id) 
         REFERENCES course_class(course_class_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- ENROLLMENT DRAFT GRADE (Draft grades for each student)
+-- ============================================================
+CREATE TABLE enrollment_draft_grade (
+    draft_grade_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    enrollment_id UNIQUEIDENTIFIER NOT NULL UNIQUE,
+    
+    -- Draft grades (editable by instructors)
+    attendance_grade_draft NUMERIC(4,2) CHECK (attendance_grade_draft BETWEEN 0 AND 10),
+    midterm_grade_draft NUMERIC(4,2) CHECK (midterm_grade_draft BETWEEN 0 AND 10),
+    final_grade_draft NUMERIC(4,2) CHECK (final_grade_draft BETWEEN 0 AND 10),
+    
+    updated_at DATETIME2 NULL,
+    
+    CONSTRAINT FK_enrollment_draft_grade_enrollment FOREIGN KEY (enrollment_id)
+        REFERENCES student_enrollment(enrollment_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- ENROLLMENT GRADE VERSION (Version history of grade submissions)
+-- ============================================================
+CREATE TABLE enrollment_grade_version (
+    grade_version_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    course_class_id UNIQUEIDENTIFIER NOT NULL,
+    
+    -- Version information
+    version_number INT NOT NULL CHECK (version_number > 0),
+    
+    -- Submission workflow
+    version_status NVARCHAR(50) DEFAULT 'pending' 
+        CHECK (version_status IN ('pending', 'approved', 'rejected')),
+    
+    -- Submission info
+    submitted_by UNIQUEIDENTIFIER NULL, -- Instructor who submitted
+    submitted_at DATETIME2 NULL,
+    submission_note NVARCHAR(MAX) NULL,
+    
+    -- Approval info
+    approved_by UNIQUEIDENTIFIER NULL, -- Admin who approved/rejected
+    approved_at DATETIME2 NULL,
+    approval_note NVARCHAR(MAX) NULL,
+    
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    
+    CONSTRAINT FK_enrollment_grade_version_course_class FOREIGN KEY (course_class_id)
+        REFERENCES course_class(course_class_id) ON DELETE CASCADE,
+    CONSTRAINT FK_enrollment_grade_version_submitted_by FOREIGN KEY (submitted_by)
+        REFERENCES instructor(instructor_id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_enrollment_grade_version_approved_by FOREIGN KEY (approved_by)
+        REFERENCES admin(admin_id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    
+    -- Ensure unique version numbers per course class
+    CONSTRAINT UQ_enrollment_grade_version UNIQUE (course_class_id, version_number),
+    
+    -- Validation: submitted fields must be set when status is not draft
+    CONSTRAINT CHK_enrollment_grade_version_submitted CHECK (
+        (version_status = 'pending' AND submitted_by IS NOT NULL AND submitted_at IS NOT NULL) OR
+        (version_status IN ('approved', 'rejected') AND submitted_by IS NOT NULL AND submitted_at IS NOT NULL AND approved_by IS NOT NULL AND approved_at IS NOT NULL)
+    )
+);
+
+-- ============================================================
+-- ENROLLMENT GRADE DETAIL (Individual student grades per version)
+-- ============================================================
+CREATE TABLE enrollment_grade_detail (
+    grade_detail_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    grade_version_id UNIQUEIDENTIFIER NOT NULL,
+    enrollment_id UNIQUEIDENTIFIER NOT NULL,
+    
+    -- Official grades for this version
+    attendance_grade NUMERIC(4,2) CHECK (attendance_grade BETWEEN 0 AND 10),
+    midterm_grade NUMERIC(4,2) CHECK (midterm_grade BETWEEN 0 AND 10),
+    final_grade NUMERIC(4,2) CHECK (final_grade BETWEEN 0 AND 10),
+    
+    CONSTRAINT FK_enrollment_grade_detail_version FOREIGN KEY (grade_version_id)
+        REFERENCES enrollment_grade_version(grade_version_id) ON DELETE CASCADE,
+    CONSTRAINT FK_enrollment_grade_detail_enrollment FOREIGN KEY (enrollment_id)
+        REFERENCES student_enrollment(enrollment_id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    
+    -- Ensure one grade record per student per version
+    CONSTRAINT UQ_enrollment_grade_detail UNIQUE (grade_version_id, enrollment_id)
 );
 
 -- ============================================================
