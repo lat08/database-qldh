@@ -126,35 +126,6 @@ CREATE TABLE admin (
 );
 
 -- ============================================================
--- NOTE (Ghi chú/Thông báo)
--- ============================================================
-CREATE TABLE note (
-    note_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    -- Changed to user_id to align with user_account table's primary key name
-    user_id UNIQUEIDENTIFIER NOT NULL, 
-    content NVARCHAR(MAX) NOT NULL,
-    -- Type of the note (e.g., exam, homework, schedule, personal, reminder)
-    note_type NVARCHAR(50) NOT NULL CHECK (note_type IN (
-        'exam', 
-        'homework', 
-        'schedule', 
-        'personal', 
-        'reminder', 
-        'announcement'
-    )),
-
-    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at DATETIME2 NULL,
-    created_by UNIQUEIDENTIFIER NULL,
-    updated_by UNIQUEIDENTIFIER NULL,
-    is_deleted BIT NOT NULL DEFAULT 0,
-    is_active BIT NOT NULL DEFAULT 1,
-
-    CONSTRAINT FK_note_user_account FOREIGN KEY (user_id)
-        REFERENCES user_account(user_id) ON DELETE CASCADE
-);
-
--- ============================================================
 -- OTP & REFRESH TOKEN
 -- ============================================================
 CREATE TABLE user_otp (
@@ -578,17 +549,19 @@ CREATE TABLE course_class (
     date_end DATE NOT NULL,
     max_students INT NOT NULL CHECK (max_students > 0),
     day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 2 AND 8),
-    start_period INT NOT NULL CHECK (start_period BETWEEN 1 AND 16),
-    end_period INT NOT NULL CHECK (end_period BETWEEN 1 AND 16),
-    course_class_status NVARCHAR(20) DEFAULT 'active' CHECK (course_class_status IN ('active', 'inactive', 'completed', 'cancelled')),
+    start_period INT NOT NULL CHECK (start_period BETWEEN 1 AND 12),
+    end_period INT NOT NULL CHECK (end_period BETWEEN 1 AND 12),
+    course_class_status NVARCHAR(20) DEFAULT 'active' 
+        CHECK (course_class_status IN ('active', 'inactive', 'completed', 'cancelled')),
 
     -- Grade submission workflow
-    grade_submission_status NVARCHAR(50) DEFAULT 'draft' CHECK (grade_submission_status IN ('draft', 'pending', 'approved')),
+    grade_submission_status NVARCHAR(50) DEFAULT 'draft' 
+        CHECK (grade_submission_status IN ('draft', 'pending', 'approved')),
     grade_submitted_at DATETIME2 NULL,
     grade_approved_at DATETIME2 NULL,
-    grade_approved_by UNIQUEIDENTIFIER NULL,    -- Admin duyệt
-    grade_submission_note NVARCHAR(MAX) NULL,   -- Ghi chú khi gửi duyệt
-    grade_approval_note NVARCHAR(MAX) NULL,     -- Ghi chú khi admin duyệt/từ chối
+    grade_approved_by UNIQUEIDENTIFIER NULL,
+    grade_submission_note NVARCHAR(MAX) NULL,
+    grade_approval_note NVARCHAR(MAX) NULL,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -603,7 +576,22 @@ CREATE TABLE course_class (
         REFERENCES instructor(instructor_id) ON DELETE SET NULL,
     CONSTRAINT FK_course_class_room FOREIGN KEY (room_id) 
         REFERENCES room(room_id) ON DELETE NO ACTION,
+
     CONSTRAINT CHK_course_class_periods CHECK (end_period >= start_period),
+
+    -- Custom constraint: start_period and end_period must belong to the same valid range
+    CONSTRAINT CHK_course_class_period_block CHECK (
+        (
+            start_period BETWEEN 1 AND 5 AND end_period BETWEEN 1 AND 5
+        )
+        OR (
+            start_period BETWEEN 6 AND 9 AND end_period BETWEEN 6 AND 9
+        )
+        OR (
+            start_period BETWEEN 10 AND 12 AND end_period BETWEEN 10 AND 12
+        )
+    ),
+
     CONSTRAINT CHK_course_class_dates CHECK (date_end > date_start)
 );
 
@@ -726,8 +714,8 @@ CREATE TABLE schedule_change (
     makeup_date DATE NULL,
     makeup_room_id UNIQUEIDENTIFIER NULL,
     day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 2 AND 8),
-    start_period INT NOT NULL CHECK (start_period BETWEEN 1 AND 16),
-    end_period INT NOT NULL CHECK (end_period BETWEEN 1 AND 16),
+    start_period INT NOT NULL CHECK (start_period BETWEEN 1 AND 12),
+    end_period INT NOT NULL CHECK (end_period BETWEEN 1 AND 12),
     reason NVARCHAR(500),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
@@ -741,7 +729,21 @@ CREATE TABLE schedule_change (
         REFERENCES course_class(course_class_id) ON DELETE CASCADE,
     CONSTRAINT FK_schedule_change_makeup_room FOREIGN KEY (makeup_room_id) 
         REFERENCES room(room_id) ON DELETE NO ACTION,
-    CONSTRAINT CHK_schedule_change_periods CHECK (end_period >= start_period)
+
+    CONSTRAINT CHK_schedule_change_periods CHECK (end_period >= start_period),
+
+    -- Custom constraint: start_period and end_period must be in the same valid range
+    CONSTRAINT CHK_schedule_change_period_block CHECK (
+        (
+            start_period BETWEEN 1 AND 5 AND end_period BETWEEN 1 AND 5
+        )
+        OR (
+            start_period BETWEEN 6 AND 9 AND end_period BETWEEN 6 AND 9
+        )
+        OR (
+            start_period BETWEEN 10 AND 12 AND end_period BETWEEN 10 AND 12
+        )
+    )
 );
 
 -- ============================================================
@@ -1102,6 +1104,44 @@ CREATE TABLE payment_postponement_request (
         (request_status = 'cancelled')
     )
 );
+
+-- ============================================================
+-- NOTE (Student Course Notes)
+-- ============================================================
+CREATE TABLE note (
+    note_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    student_id UNIQUEIDENTIFIER NOT NULL,
+    course_class_id UNIQUEIDENTIFIER NOT NULL, -- Link to specific course class
+    
+    title NVARCHAR(200) NOT NULL,
+    content NVARCHAR(MAX) NOT NULL,
+    
+    -- Course-focused note type
+    note_type NVARCHAR(50) NOT NULL CHECK (note_type IN (
+        'exam_reminder',      -- Nhắc nhở thi
+        'exam_preparation',   -- Chuẩn bị ôn thi
+        'homework',           -- Bài tập về nhà
+        'review_topic',       -- Ôn tập chủ đề
+        'class_note',         -- Ghi chú lớp học
+        'study_plan'          -- Kế hoạch học tập
+    )),
+    
+    -- Priority for notes
+    priority NVARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+    
+    -- Note status
+    note_status NVARCHAR(20) DEFAULT 'to_do' CHECK (note_status IN ('to_do', 'completed')),
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+
+    CONSTRAINT FK_note_student FOREIGN KEY (student_id)
+        REFERENCES student(student_id) ON DELETE CASCADE,
+    CONSTRAINT FK_note_course_class FOREIGN KEY (course_class_id)
+        REFERENCES course_class(course_class_id) ON DELETE CASCADE
+);
+
 
 -- ============================================================
 -- THEME CONFIGURATIONS

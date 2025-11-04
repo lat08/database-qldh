@@ -105,12 +105,14 @@ def create_course_classes(self):
         [5, 6],    # Thu, Fri
     ]
     
-    # Time slots
+    # Time slots - FIXED: Each slot must stay within the same block
+    # Block 1: periods 1-5 (morning)
+    # Block 2: periods 6-9 (afternoon)
+    # Block 3: periods 10-12 (evening)
     time_slots = [
-        (1, 3),    # 7:00-9:30
-        (4, 6),    # 9:45-12:15
-        (7, 9),    # 13:00-15:30
-        (10, 12),  # 15:45-18:15
+        (1, 5),
+        (6, 9),
+        (10, 12)
     ]
     
     room_usage = {}

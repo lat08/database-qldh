@@ -67,7 +67,7 @@ def create_notifications(self):
     statuses = ['pending', 'sent', 'cancelled']
     
     # Create 20 sample notifications
-    for i in range(20):
+    for i in range(50):
         schedule_id = self.generate_uuid()
         notif_type = random.choice(notification_types)
         target_type = random.choice(target_types)
@@ -128,6 +128,7 @@ def create_notifications(self):
                     'event_start_date', 'created_at', 'updated_at', 'is_deleted',
                     'is_active'],
                     notification_rows)
+
 def create_documents(self):
     """
     Generate document records for course materials
@@ -338,93 +339,124 @@ def create_regulations(self):
         self.add_statement("-- WARNING: No regulations to insert!")
 
 def create_notes(self):
-    """Generate notes for all users (students, instructors, admins)"""
-    self.add_statement("\n-- ==================== NOTES ====================")
+    """Generate course-focused notes for the test student"""
+    self.add_statement("\n-- ==================== STUDENT COURSE NOTES ====================")
     
     import random
     from datetime import datetime, timedelta
     
-    note_rows = []
-    note_types = ['exam', 'homework', 'schedule', 'personal', 'reminder', 'announcement']
+    # FIXED TEST STUDENT ID
+    test_student_id = '00000000-0000-0000-0000-000000000003'
     
-    # Sample note content templates
+    note_rows = []
+    
+    # Course-focused note content templates
     note_contents = {
-        'exam': [
-            'Ôn tập chương 3: Cấu trúc dữ liệu và giải thuật',
-            'Chuẩn bị tài liệu cho kỳ thi giữa kỳ môn Lập trình',
-            'Lưu ý: Kỳ thi cuối kỳ sẽ thi trên máy tính',
-            'Ôn lại các bài tập đã làm trên lớp',
-            'Xem lại slide bài giảng về OOP',
+        'exam_reminder': [
+            ('Nhắc nhở: Thi giữa kỳ vào tuần sau', 'Cần ôn tập chương 1-3\n• Xem lại bài tập đã làm\n• Làm đề thi mẫu', 'low'),
+            ('Còn 5 ngày nữa đến kỳ thi cuối kỳ', 'Chuẩn bị:\n• Ôn tập toàn bộ kiến thức\n• Xem lại các bài tập khó\n• Chuẩn bị dụng cụ thi', 'high'),
+            ('Thi tuần này - Phòng A101', 'Lưu ý:\n• Mang theo CMND/CCCD và thẻ SV\n• Đến trước 15 phút\n• Không mang tài liệu', 'low'),
+            ('Kỳ thi thực hành trên máy', 'Yêu cầu:\n• Biết sử dụng công cụ X\n• Ôn lại các bài lab đã làm\n• Chuẩn bị tài khoản đăng nhập', 'high'),
+        ],
+        'exam_preparation': [
+            ('Ôn tập chương 3: Cấu trúc dữ liệu', 'Nội dung:\n• Stack và Queue\n• Linked List\n• Tree và Graph\n• Làm bài tập 3.1-3.5', 'medium'),
+            ('Cần xem lại: Bài giảng tuần 5-6', 'Trọng tâm:\n• Thuật toán sắp xếp\n• Độ phức tạp thuật toán\n• Bài tập áp dụng', 'medium'),
+            ('Làm lại bài tập về con trỏ', 'Phần cần ôn:\n• Khai báo và sử dụng con trỏ\n• Cấp phát động\n• Con trỏ hàm\n• Bài tập 4.3, 4.7, 4.9', 'high'),
+            ('Ôn thi: Tập trung Database Normalization', 'Kiến thức:\n• 1NF, 2NF, 3NF, BCNF\n• Functional Dependencies\n• Bài tập phân tích và chuẩn hóa', 'high'),
+            ('Học nhóm: Ôn chương 2 với bạn', 'Kế hoạch:\n• Thảo luận các khái niệm khó\n• Làm bài tập nhóm\n• Giải đáp thắc mắc lẫn nhau', 'low'),
         ],
         'homework': [
-            'Hoàn thành bài tập lập trình tuần 5',
-            'Nộp báo cáo project môn Cơ sở dữ liệu',
-            'Làm bài tập về nhà phần Mạng máy tính',
-            'Chuẩn bị thuyết trình nhóm',
-            'Đọc tài liệu chương 4 trước buổi học',
+            ('Bài tập tuần 7 - Deadline 3 ngày nữa', 'Nội dung:\n• Bài 1: Cài đặt Stack\n• Bài 2: Ứng dụng Queue\n• Bài 3: Binary Search Tree\n• Nộp file code + báo cáo', 'high'),
+            ('Hoàn thành Lab 4 trước buổi học', 'Yêu cầu:\n• Viết chương trình quản lý sinh viên\n• Sử dụng file để lưu trữ\n• Test đầy đủ các chức năng', 'high'),
+            ('Bài tập nhóm - Thuyết trình tuần sau', 'Công việc:\n• Hoàn thiện slide (Tuấn)\n• Chuẩn bị demo (Tôi)\n• Viết báo cáo (Lan)', 'medium'),
+            ('Đọc tài liệu chương 5 trước lớp', 'Nội dung cần đọc:\n• Section 5.1-5.3\n• Xem video hướng dẫn\n• Ghi chú các điểm chưa hiểu', 'medium'),
         ],
-        'schedule': [
-            'Lịch học thay đổi: Thứ 3 sang Thứ 5 cùng giờ',
-            'Buổi học bù: Thứ 7 tuần sau lúc 8:00',
-            'Nhắc nhở: Họp lớp vào thứ 6 này',
-            'Lớp học chuyển sang phòng B201',
-            'Giảng viên nghỉ buổi học tuần này',
+        'review_topic': [
+            ('Tổng hợp: Lập trình hướng đối tượng', 'Kiến thức chính:\n• Class và Object\n• Inheritance\n• Polymorphism\n• Encapsulation\n• Abstraction', 'medium'),
+            ('Công thức quan trọng cần nhớ', 'Toán học:\n• Tổ hợp C(n,k)\n• Hoán vị P(n,k)\n• Độ phức tạp O(n), O(logn), O(n²)', 'high'),
+            ('Tổng hợp bài tập đã chữa trên lớp', 'Danh sách:\n• Bài tập 1.1, 1.5 (Tuần 1)\n• Bài tập 2.3, 2.7 (Tuần 2)\n• Bài tập 3.2, 3.9 (Tuần 3)', 'medium'),
+            ('Lý thuyết trọng tâm: SQL Queries', 'Nội dung:\n• SELECT, WHERE, JOIN\n• GROUP BY, HAVING\n• Subqueries\n• Set Operations', 'high'),
         ],
-        'personal': [
-            'Ghi chú: Cần mua thêm giáo trình',
-            'Nhớ in tài liệu cho bài thuyết trình',
-            'Mục tiêu: Hoàn thành 3 chương ôn tập',
-            'Cần liên hệ nhóm để bàn về project',
-            'Đăng ký môn học kỳ sau',
+        'class_note': [
+            ('Ghi chú buổi học 15/11', 'Nội dung đã học:\n• Giới thiệu về Graph\n• BFS và DFS algorithms\n• Bài tập áp dụng\n\nBài tập về nhà: Bài 6.1-6.3', 'low'),
+            ('Lưu ý từ giảng viên về đồ án', 'Thông tin:\n• Deadline: 20/12\n• Làm theo nhóm 3-4 người\n• Yêu cầu demo và báo cáo\n• Chiếm 30% điểm môn học', 'high'),
+            ('Slide bài giảng đã được đăng', 'Tài liệu:\n• Chương 4: Data Structures\n• Chương 5: Algorithms\n• Bài tập bổ sung\n• Code examples', 'medium'),
+            ('Meeting với nhóm - Thứ 5 lúc 14:00', 'Nội dung họp:\n• Review tiến độ project\n• Phân công công việc tuần tới\n• Thảo luận vấn đề kỹ thuật', 'medium'),
         ],
-        'reminder': [
-            'Nhắc nhở: Deadline nộp bài tuần sau',
-            'Đừng quên mang theo USB đến lớp',
-            'Nhớ đóng học phí trước ngày 15',
-            'Cần nộp đơn xin học bổng',
-            'Nhắc: Meeting với advisor vào thứ 4',
+        'study_plan': [
+            ('Kế hoạch ôn thi cuối kỳ', 'Tuần 1:\n• Ôn chương 1-2\n• Làm 20 bài tập\n\nTuần 2:\n• Ôn chương 3-4\n• Làm đề thi mẫu\n\nTuần 3:\n• Ôn toàn bộ\n• Thi thử', 'medium'),
+            ('Lịch học tuần này', 'Thứ 2: 7:00-9:00 Toán\nThứ 3: 13:00-15:00 Lập trình\nThứ 5: 9:00-11:00 Cơ sở dữ liệu\nThứ 6: Lab thực hành', 'low'),
+            ('Mục tiêu học tập tháng này', 'Mục tiêu:\n• Hoàn thành 80% bài tập\n• Điểm GPA >= 3.5\n• Tham gia đủ buổi học\n• Hoàn thành đồ án đúng hạn', 'medium'),
         ],
-        'announcement': [
-            'Thông báo: Lịch thi đã được cập nhật',
-            'Lưu ý từ giảng viên: Thay đổi tiêu chí chấm điểm',
-            'Cập nhật mới: Tài liệu bài giảng đã đăng',
-            'Thông báo nghỉ học do thời tiết xấu',
-            'Trường tổ chức hội thảo chuyên ngành',
-        ]
     }
     
-    # Collect all user_ids from fixed accounts
-    all_user_ids = []
-    for account_key, account_data in self.data['fixed_accounts'].items():
-        if 'user_id' in account_data:
-            all_user_ids.append(account_data['user_id'])
+    # FIXED: Get enrolled course_class_ids for test student
+    enrolled_course_class_ids = []
     
-    if not all_user_ids:
-        self.add_statement("-- WARNING: No user accounts found for note generation")
+    # Look through enrollments to find test student's course classes
+    if 'enrollments' in self.data:
+        for enrollment in self.data['enrollments']:
+            if enrollment['student_id'] == test_student_id:
+                enrolled_course_class_ids.append(enrollment['course_class_id'])
+    
+    if not enrolled_course_class_ids:
+        self.add_statement("-- ERROR: No course class enrollments found for test student")
+        self.add_statement("-- Skipping note generation")
         return
     
-    # Generate 2-5 notes per user with random dates in the past 90 days
-    for user_id in all_user_ids:
-        num_notes = random.randint(2, 5)
-        for _ in range(num_notes):
-            note_id = self.generate_uuid()
-            note_type = random.choice(note_types)
-            content = random.choice(note_contents[note_type])
-            
-            # Random date within last 90 days
-            days_ago = random.randint(0, 90)
-            created_at = datetime.now() - timedelta(days=days_ago)
-            
-            note_rows.append([note_id, user_id, content, note_type, created_at])
+    self.add_statement(f"-- Found {len(enrolled_course_class_ids)} enrolled course classes for test student")
     
-    if note_rows:
-        self.bulk_insert('note',
-                        ['note_id', 'user_id', 'content', 'note_type', 'created_at'],
-                        note_rows)
+    # Generate exactly 10 notes distributed across enrolled courses
+    total_notes_to_generate = 10
+    
+    for i in range(total_notes_to_generate):
+        note_id = self.generate_uuid()
         
-        self.add_statement(f"-- Generated {len(note_rows)} notes for {len(all_user_ids)} users")
-    else:
-        self.add_statement("-- No notes generated")
+        # Randomly select a course class from enrolled courses
+        course_class_id = random.choice(enrolled_course_class_ids)
+        
+        # Randomly select note type and content
+        note_type = random.choice(list(note_contents.keys()))
+        title, content, default_priority = random.choice(note_contents[note_type])
+        
+        # Random date within last 30 days or future 30 days
+        days_offset = random.randint(-30, 30)
+        created_at = datetime.now() + timedelta(days=days_offset)
+        
+        # Note status - 30% completed, 70% to_do
+        note_status = 'completed' if random.random() < 0.3 else 'to_do'
+        
+        # Priority - 70% use default, 30% random
+        priority = default_priority if random.random() > 0.3 else random.choice(['low', 'medium', 'high'])
+        
+        note_rows.append([
+            note_id,
+            test_student_id,
+            course_class_id,
+            title,
+            content,
+            note_type,
+            priority,
+            note_status,
+            created_at.strftime('%Y-%m-%d %H:%M:%S')
+        ])
+    
+    # Statistics by note type
+    note_type_counts = {}
+    for row in note_rows:
+        note_type = row[5]
+        note_type_counts[note_type] = note_type_counts.get(note_type, 0) + 1
+    
+    completed_count = sum(1 for row in note_rows if row[7] == 'completed')
+    
+    self.add_statement(f"-- Generated {len(note_rows)} notes for test student")
+    self.add_statement(f"-- Distribution: {dict(note_type_counts)}")
+    self.add_statement(f"-- Status: {completed_count} completed, {len(note_rows) - completed_count} to_do")
+    
+    self.bulk_insert('note',
+                    ['note_id', 'student_id', 'course_class_id', 
+                     'title', 'content', 'note_type', 'priority', 'note_status', 'created_at'],
+                    note_rows)
 
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_schedule_changes = create_schedule_changes
