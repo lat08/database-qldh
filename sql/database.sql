@@ -672,13 +672,7 @@ CREATE TABLE enrollment_grade_version (
         REFERENCES admin(admin_id) ON DELETE NO ACTION ON UPDATE NO ACTION,
     
     -- Ensure unique version numbers per course class
-    CONSTRAINT UQ_enrollment_grade_version UNIQUE (course_class_id, version_number),
-    
-    -- Validation: submitted fields must be set when status is not draft
-    CONSTRAINT CHK_enrollment_grade_version_submitted CHECK (
-        (version_status = 'pending' AND submitted_by IS NOT NULL AND submitted_at IS NOT NULL) OR
-        (version_status IN ('approved', 'rejected') AND submitted_by IS NOT NULL AND submitted_at IS NOT NULL AND approved_by IS NOT NULL AND approved_at IS NOT NULL)
-    )
+    CONSTRAINT UQ_enrollment_grade_version UNIQUE (course_class_id, version_number)
 );
 
 -- ============================================================
@@ -810,7 +804,7 @@ CREATE TABLE exam (
     exam_type NVARCHAR(20) DEFAULT 'final' CHECK (exam_type IN ('midterm', 'final', 'makeup', 'quiz')),
     notes NVARCHAR(500),
     num_exam_codes_needed INT NOT NULL CHECK (num_exam_codes_needed > 0),
-    exam_status NVARCHAR(20) DEFAULT 'draft' CHECK (exam_status IN ('draft', 'ready', 'published', 'cancelled')), 
+    exam_status NVARCHAR(20) DEFAULT 'draft' CHECK (exam_status IN ('draft', 'ready', 'published', 'cancelled')),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -1106,40 +1100,16 @@ CREATE TABLE payment_postponement_request (
 );
 
 -- ============================================================
--- NOTE (Student Course Notes)
+-- NOTE
 -- ============================================================
 CREATE TABLE note (
     note_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     student_id UNIQUEIDENTIFIER NOT NULL,
-    course_class_id UNIQUEIDENTIFIER NOT NULL, -- Link to specific course class
-    
-    title NVARCHAR(200) NOT NULL,
     content NVARCHAR(MAX) NOT NULL,
-    
-    -- Course-focused note type
-    note_type NVARCHAR(50) NOT NULL CHECK (note_type IN (
-        'exam_reminder',      -- Nhắc nhở thi
-        'exam_preparation',   -- Chuẩn bị ôn thi
-        'homework',           -- Bài tập về nhà
-        'review_topic',       -- Ôn tập chủ đề
-        'class_note',         -- Ghi chú lớp học
-        'study_plan'          -- Kế hoạch học tập
-    )),
-    
-    -- Priority for notes
-    priority NVARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
-    
-    -- Note status
-    note_status NVARCHAR(20) DEFAULT 'to_do' CHECK (note_status IN ('to_do', 'completed')),
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
     is_deleted BIT NOT NULL DEFAULT 0,
-
-    CONSTRAINT FK_note_student FOREIGN KEY (student_id)
-        REFERENCES student(student_id) ON DELETE CASCADE,
-    CONSTRAINT FK_note_course_class FOREIGN KEY (course_class_id)
-        REFERENCES course_class(course_class_id) ON DELETE CASCADE
 );
 
 

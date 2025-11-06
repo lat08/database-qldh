@@ -65,7 +65,14 @@ def update_instructor_faculty_assignments(self):
     self.add_statement(f"-- Assigned {len(update_statements)} instructors to faculties")
 
 def create_academic_years_and_semesters(self):
+    """
+    REVISED: Proper semester transitions with 10-day registration windows
+    - Nov 6, 2025 is in middle of Summer→Fall registration (Nov 1-10)
+    - Timeline: Semester End → 10-day Registration → Next Semester Start
+    """
     self.add_statement("\n-- ==================== ACADEMIC YEARS & SEMESTERS ====================")
+    self.add_statement("-- 10-day registration window between semesters")
+    self.add_statement("-- Nov 6, 2025 = middle of Summer→Fall registration")
     
     ay_rows = []
     sem_rows = []
@@ -90,11 +97,25 @@ def create_academic_years_and_semesters(self):
         
         ay_rows.append([academic_year_id, year_range, start_date, end_date, status])
         
-        semesters_info = [
-            ('fall', f'Học kỳ 1 ({start_year}-{end_year})', date(start_year, 9, 1), date(start_year, 12, 31)),
-            ('spring', f'Học kỳ 2 ({start_year}-{end_year})', date(end_year, 1, 1), date(end_year, 5, 31)),
-            ('summer', f'Học kỳ hè ({start_year}-{end_year})', date(end_year, 6, 1), date(end_year, 8, 31))
-        ]
+        # REVISED: Semesters with 10-day gaps for registration
+        # Fall: Sep 11 - Dec 31 (after 10-day registration: Sep 1-10)
+        # Spring: Jan 11 - May 31 (after 10-day registration: Jan 1-10)
+        # Summer: Jun 11 - Aug 31 (after 10-day registration: Jun 1-10)
+        
+        # SPECIAL: For 2025-2026, adjust so Nov 6 is in Summer→Fall registration
+        if start_year == 2025:
+            # Summer 2026 ends Oct 31, Registration Nov 1-10, Fall starts Nov 11
+            semesters_info = [
+                ('fall', f'Học kỳ 1 ({start_year}-{end_year})', date(2025, 11, 11), date(2025, 12, 31)),
+                ('spring', f'Học kỳ 2 ({start_year}-{end_year})', date(end_year, 1, 11), date(end_year, 5, 31)),
+                ('summer', f'Học kỳ hè ({start_year}-{end_year})', date(end_year, 6, 11), date(end_year, 10, 31))
+            ]
+        else:
+            semesters_info = [
+                ('fall', f'Học kỳ 1 ({start_year}-{end_year})', date(start_year, 9, 11), date(start_year, 12, 31)),
+                ('spring', f'Học kỳ 2 ({start_year}-{end_year})', date(end_year, 1, 11), date(end_year, 5, 31)),
+                ('summer', f'Học kỳ hè ({start_year}-{end_year})', date(end_year, 6, 11), date(end_year, 8, 31))
+            ]
         
         for sem_type, sem_name, sem_start, sem_end in semesters_info:
             semester_id = self.generate_uuid()
@@ -110,20 +131,21 @@ def create_academic_years_and_semesters(self):
                 'end_date': sem_end
             })
             
-            # SPECIAL HANDLING: Spring 2026 registration must cover ALL of November 2025
-            if start_year == 2025 and sem_type == 'spring':
-                # Spring 2026 starts Jan 2026, so registration should be Nov 1 - Dec 15, 2025
-                reg_start = date(2025, 11, 1)
-                reg_end = date(2025, 12, 15)
-            else:
-                # Default: registration starts 30 days before, ends 7 days before
-                reg_start = sem_start - timedelta(days=30)
-                reg_end = sem_start - timedelta(days=7)
+            # Registration: 10 days before semester start
+            reg_start = sem_start - timedelta(days=10)
+            reg_end = sem_start - timedelta(days=1)
             
-            sem_rows.append([semester_id, sem_name, academic_year_id, sem_type, sem_start, sem_end, reg_start, reg_end, 'active'])
+            sem_rows.append([semester_id, sem_name, academic_year_id, sem_type, 
+                           sem_start, sem_end, reg_start, reg_end, 'active'])
     
-    self.bulk_insert('academic_year', ['academic_year_id', 'year_name', 'start_date', 'end_date', 'academic_year_status'], ay_rows)
-    self.bulk_insert('semester', ['semester_id', 'semester_name', 'academic_year_id', 'semester_type', 'start_date', 'end_date', 'registration_start_date', 'registration_end_date', 'semester_status'], sem_rows)
+    self.bulk_insert('academic_year', 
+                    ['academic_year_id', 'year_name', 'start_date', 'end_date', 'academic_year_status'], 
+                    ay_rows)
+    self.bulk_insert('semester', 
+                    ['semester_id', 'semester_name', 'academic_year_id', 'semester_type', 
+                     'start_date', 'end_date', 'registration_start_date', 'registration_end_date', 
+                     'semester_status'], 
+                    sem_rows)
 
 def create_training_systems(self):
     self.add_statement("\n-- ==================== TRAINING SYSTEMS ====================")

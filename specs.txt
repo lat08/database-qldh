@@ -42,6 +42,24 @@ citizen_id: 000901234999
 address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
 class_year: 2023
 
+[test_student2]
+person_id: 00000000-0000-0000-0001-000000000999
+user_id: 00000000-0000-0000-0001-000000000999
+student_id: 00000000-0000-0000-0001-000000000999
+username: THAITUAN
+email: phanthanhthaituan452005@gmail.com
+full_name: Phan Thanh Thái Tuấn
+student_code: SV007
+gender: male
+date_of_birth: 2005-01-15
+phone_number: 0901239999
+citizen_id: 000901239999
+address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
+class_year: 2023
+
+
+
+
 # ============================================================
 # FIXED INSTRUCTOR ACCOUNT
 # ============================================================

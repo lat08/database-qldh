@@ -15,15 +15,19 @@ class SpecParser:
                     self.current_section = line[1:-1]
                     self.data[self.current_section] = []
                 # IMPORTANT: Check for pipe FIRST (before colon)
-                # This prevents URLs with colons from being parsed as config
                 elif self.current_section and '|' in line:
                     self.data[self.current_section].append(line)
-                # Then check for colon (for config lines)
+                # Then check for colon (config lines) - but EXCLUDE URLs
                 elif self.current_section and ':' in line:
-                    # Make sure it's a config line (key: value format)
-                    if line.count(':') >= 1 and not line.startswith('http'):
+                    # Skip if line starts with http/https (URL)
+                    if line.startswith('http://') or line.startswith('https://'):
+                        self.data[self.current_section].append(line)
+                    # Skip if line contains '://' anywhere (URL)
+                    elif '://' in line:
+                        self.data[self.current_section].append(line)
+                    # Otherwise treat as config (key: value)
+                    else:
                         key, value = line.split(':', 1)
                         self.data.setdefault(self.current_section + '_config', {})[key.strip()] = value.strip()
         
         return self.data
-    

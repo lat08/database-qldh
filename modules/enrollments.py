@@ -4,17 +4,17 @@ from .config import *
 
 def create_student_enrollments(self):
     """
-    UPDATED: New schema with separate tables for draft grades and grade versions
-    - student_enrollment: Only tracks enrollment, no grades
-    - enrollment_draft_grade: Draft grades being worked on by instructors
-    - enrollment_grade_version: Version history of grade submissions per course_class
-    - enrollment_grade_detail: Actual grades for each student in each version
+    UPDATED: New enrollment strategy
+    - 20% enrollment rate (not 70%)
+    - 10% of enrollments have payments (not 50%)
+    - NO enrollments beyond Fall 2025
+    - Senior students still get 100% curriculum completion
     """
-    self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (NEW SCHEMA) ====================")
-    self.add_statement("-- Phase 1: Create enrollments (no grades)")
-    self.add_statement("-- Phase 2: Create draft grades for current courses")
-    self.add_statement("-- Phase 3: Create grade versions for approved/pending submissions")
-    self.add_statement("-- Senior students (2021-2022) complete 100% of curriculum requirements")
+    self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (REVISED) ====================")
+    self.add_statement("-- Enrollment rate: 20% of available courses")
+    self.add_statement("-- Payment rate: 10% of enrollments")
+    self.add_statement("-- Enrollment cutoff: Fall 2025 (no Spring/Summer 2026)")
+    self.add_statement("-- Senior students (2021-2022) complete 100% of curriculum")
     
     enrollment_rows = []
     draft_grade_rows = []
@@ -22,7 +22,7 @@ def create_student_enrollments(self):
     grade_detail_rows = []
     
     self.data['enrollments'] = []
-    self.data['grade_versions'] = {}  # course_class_id -> list of versions
+    self.data['grade_versions'] = {}
     
     enrolled_combinations = set()
     
@@ -56,13 +56,15 @@ def create_student_enrollments(self):
     
     stats = {
         'total_enrollments': 0,
+        'enrolled_students': 0,
+        'not_enrolled': 0,
         'with_draft_grades': 0,
         'with_official_grades': 0,
         'no_grades_yet': 0
     }
 
     # =================================================================
-    # PHASE 1: CREATE ENROLLMENTS FOR ALL STUDENTS
+    # PHASE 1: CREATE ENROLLMENTS (20% RATE, NO SPRING/SUMMER 2026)
     # =================================================================
     for student in self.data['students']:
         class_id = student['class_id']
@@ -72,17 +74,15 @@ def create_student_enrollments(self):
         
         curriculum_id = cls.get('curriculum_id')
         if not curriculum_id:
-            self.add_statement(f"-- WARNING: Class {cls.get('class_code')} has no curriculum_id")
             continue
         
-        # Get all subjects in this curriculum via curriculum_details
+        # Get all subjects in this curriculum
         curriculum_subject_ids = set()
         for cd in self.data.get('curriculum_details', []):
             if cd['curriculum_id'] == curriculum_id:
                 curriculum_subject_ids.add(cd['subject_id'])
         
         if not curriculum_subject_ids:
-            self.add_statement(f"-- WARNING: No subjects found for curriculum {curriculum_id}")
             continue
         
         is_fixed = student.get('is_fixed', False)
@@ -94,6 +94,7 @@ def create_student_enrollments(self):
             total_senior_students += 1
         
         enrolled_subjects_for_student = set()
+        student_has_enrolled = False
         
         # Normal enrollment
         for course in self.data['courses']:
@@ -102,23 +103,40 @@ def create_student_enrollments(self):
             if course['start_year'] < student_start_year:
                 continue
             
-            # Skip future courses for non-seniors
+            # CRITICAL: Block all enrollments beyond Fall 2025
+            if course['start_year'] > 2025:
+                continue
+            if course['start_year'] == 2025 and course['semester_type'] in ('spring', 'summer'):
+                continue
+            
+            # Skip future courses for non-seniors (redundant but explicit)
             if not is_senior:
                 if course['start_year'] > 2025:
                     continue
                 if course['start_year'] == 2025 and course['semester_type'] == 'summer':
                     continue
             
+            # CHANGED: 20% enrollment rate (was 70%)
+            should_enroll = random.random() < 0.20
+            
+            if not should_enroll and not is_senior:
+                skipped_count += 1
+                continue
+            
             key = (course['course_id'], course['semester_id'])
             available_classes = course_classes_by_course_semester.get(key, [])
             if not available_classes:
                 continue
             
-            # Find conflict-free section
+            # Find conflict-free section with available space
             assigned_course_class = None
             for cc in available_classes:
                 enrollment_key = (student['student_id'], cc['course_class_id'])
                 if enrollment_key in enrolled_combinations:
+                    continue
+                
+                # Check if class is full
+                if cc['enrolled_count'] >= cc['max_students']:
                     continue
                 
                 # Check schedule conflicts
@@ -136,20 +154,19 @@ def create_student_enrollments(self):
                     if has_conflict:
                         break
                 
-                if not has_conflict and cc['enrolled_count'] < cc['max_students']:
+                if not has_conflict:
                     assigned_course_class = cc
                     cc['enrolled_count'] += 1
                     break
             
             if not assigned_course_class:
-                if not is_senior:
-                    skipped_count += 1
                 continue
             
             # Mark as enrolled
             enrollment_key = (student['student_id'], assigned_course_class['course_class_id'])
             enrolled_combinations.add(enrollment_key)
             enrolled_subjects_for_student.add(course['subject_id'])
+            student_has_enrolled = True
             
             # Add to schedule
             for day in assigned_course_class['days']:
@@ -168,7 +185,7 @@ def create_student_enrollments(self):
             
             status = 'completed' if is_past else 'registered'
             
-            # Create enrollment record (NO GRADES HERE)
+            # Create enrollment record
             enrollment_rows.append([
                 enrollment_id,
                 student['student_id'],
@@ -191,7 +208,12 @@ def create_student_enrollments(self):
             
             stats['total_enrollments'] += 1
         
-        # Force-enroll seniors in missing subjects
+        if student_has_enrolled:
+            stats['enrolled_students'] += 1
+        else:
+            stats['not_enrolled'] += 1
+        
+        # Force-enroll seniors in missing subjects (but still respect Fall 2025 cutoff)
         if is_senior:
             missing_subjects = curriculum_subject_ids - enrolled_subjects_for_student
             
@@ -201,7 +223,14 @@ def create_student_enrollments(self):
             for subject_id in missing_subjects:
                 available_courses = courses_by_subject.get(subject_id, [])
                 if not available_courses:
-                    self.add_statement(f"-- WARNING: No courses available for subject {subject_id}")
+                    continue
+                
+                # Filter courses: only up to Fall 2025
+                available_courses = [c for c in available_courses 
+                                    if c['start_year'] < 2025 or 
+                                    (c['start_year'] == 2025 and c['semester_type'] == 'fall')]
+                
+                if not available_courses:
                     continue
                 
                 available_courses.sort(key=lambda c: (
@@ -221,14 +250,13 @@ def create_student_enrollments(self):
                         if enrollment_key in enrolled_combinations:
                             continue
                         
-                        # FORCE ENROLL
+                        # FORCE ENROLL (ignore capacity)
                         enrolled_combinations.add(enrollment_key)
                         enrolled_subjects_for_student.add(subject_id)
                         forced_enrollment_count += 1
                         
                         enrollment_id = self.generate_uuid()
                         
-                        # Create enrollment record
                         enrollment_rows.append([
                             enrollment_id,
                             student['student_id'],
@@ -255,9 +283,6 @@ def create_student_enrollments(self):
                     
                     if enrolled_in_missing:
                         break
-                
-                if not enrolled_in_missing:
-                    self.add_statement(f"-- ERROR: Could not enroll senior {student['student_code']} in subject {subject_id}")
             
             # Final check
             if not (curriculum_subject_ids - enrolled_subjects_for_student):
@@ -289,7 +314,6 @@ def create_student_enrollments(self):
             final_draft = None
             
             if grade_status == 'pending':
-                # Most pending classes have complete draft grades
                 rand = random.random()
                 if rand < 0.85:
                     attendance_draft = round(random.uniform(att_min, att_max), 2)
@@ -302,12 +326,10 @@ def create_student_enrollments(self):
             
             elif grade_status == 'draft':
                 if is_fixed:
-                    # Fixed student always has draft grades
                     attendance_draft = round(random.uniform(7.5, 9.5), 2)
                     midterm_draft = round(random.uniform(6.5, 9.0), 2)
                     final_draft = None
                 else:
-                    # Random progress on drafts
                     rand = random.random()
                     if rand < 0.40:
                         attendance_draft = round(random.uniform(att_min, att_max), 2)
@@ -317,9 +339,7 @@ def create_student_enrollments(self):
                         attendance_draft = round(random.uniform(att_min, att_max), 2)
                         midterm_draft = None
                         final_draft = None
-                    # else: no grades yet
             
-            # Only create record if at least one grade exists
             if attendance_draft is not None or midterm_draft is not None or final_draft is not None:
                 draft_grade_rows.append([
                     draft_grade_id,
@@ -327,7 +347,7 @@ def create_student_enrollments(self):
                     attendance_draft,
                     midterm_draft,
                     final_draft,
-                    None  # updated_at
+                    None
                 ])
                 stats['with_draft_grades'] += 1
 
@@ -344,7 +364,6 @@ def create_student_enrollments(self):
     for cc in self.data['course_classes']:
         grade_status = cc.get('grade_submission_status', 'draft')
         
-        # Only create grade versions for approved or pending submissions
         if grade_status not in ('approved', 'pending'):
             continue
         
@@ -354,16 +373,13 @@ def create_student_enrollments(self):
         if not enrollments:
             continue
         
-        # Create grade version
         grade_version_id = self.generate_uuid()
-        version_number = 1  # First version for now
+        version_number = 1
         
-        # Get instructor who submitted
         instructor_id = cc.get('instructor_id')
         submitted_at = cc.get('grade_submitted_at')
         submission_note = cc.get('grade_submission_note', 'Grade submission')
         
-        # Get admin who approved (if approved)
         approved_by = cc.get('grade_approved_by') if grade_status == 'approved' else None
         approved_at = cc.get('grade_approved_at') if grade_status == 'approved' else None
         approval_note = cc.get('grade_approval_note') if grade_status == 'approved' else None
@@ -379,10 +395,9 @@ def create_student_enrollments(self):
             approved_by,
             approved_at,
             approval_note,
-            submitted_at  # created_at = submitted_at
+            submitted_at
         ])
         
-        # Track version
         if course_class_id not in self.data['grade_versions']:
             self.data['grade_versions'][course_class_id] = []
         self.data['grade_versions'][course_class_id].append({
@@ -391,11 +406,10 @@ def create_student_enrollments(self):
             'status': grade_status
         })
         
-        # Create grade details for each enrolled student
+        # Create grade details
         for enrollment in enrollments:
             grade_detail_id = self.generate_uuid()
             
-            # Generate official grades
             is_past = (cc['start_year'] < 2025) or \
                      (cc['start_year'] == 2025 and cc['semester_type'] == 'spring')
             is_current = (cc['start_year'] == 2025 and cc['semester_type'] == 'fall')
@@ -406,18 +420,15 @@ def create_student_enrollments(self):
             
             if grade_status == 'approved':
                 if is_past:
-                    # Completed courses with full grades
                     attendance = round(random.uniform(att_min, att_max), 2)
                     midterm = round(random.uniform(max(mid_min, 5.5), mid_max), 2)
                     final = round(random.uniform(max(fin_min, 6.0), fin_max), 2)
                 elif is_current:
-                    # Current approved - has midterm
                     attendance = round(random.uniform(att_min, att_max), 2)
                     midterm = round(random.uniform(mid_min, mid_max), 2)
                     final = None
             
             elif grade_status == 'pending':
-                # Pending approval - similar to draft but submitted
                 if is_current:
                     attendance = round(random.uniform(att_min, att_max), 2)
                     midterm = round(random.uniform(mid_min, mid_max), 2)
@@ -435,34 +446,20 @@ def create_student_enrollments(self):
             if attendance is not None or midterm is not None or final is not None:
                 stats['with_official_grades'] += 1
 
-    # Calculate no grades yet
     stats['no_grades_yet'] = stats['total_enrollments'] - stats['with_draft_grades'] - stats['with_official_grades']
 
     # Statistics
     self.add_statement(f"\n-- ========================================")
     self.add_statement(f"-- ENROLLMENT SUMMARY")
     self.add_statement(f"-- ========================================")
+    self.add_statement(f"-- Total students: {len(self.data['students'])}")
+    self.add_statement(f"-- Students enrolled: {stats['enrolled_students']} ({stats['enrolled_students']/len(self.data['students'])*100:.1f}%)")
+    self.add_statement(f"-- Students not enrolled: {stats['not_enrolled']} ({stats['not_enrolled']/len(self.data['students'])*100:.1f}%)")
     self.add_statement(f"-- Total enrollments: {stats['total_enrollments']}")
     self.add_statement(f"-- Normal enrollments: {stats['total_enrollments'] - forced_enrollment_count}")
     self.add_statement(f"-- Forced enrollments (seniors): {forced_enrollment_count}")
-    self.add_statement(f"-- Schedule conflicts detected: {conflict_count}")
-    self.add_statement(f"-- Skipped (non-seniors): {skipped_count}")
-    self.add_statement(f"-- ")
-    self.add_statement(f"-- GRADE DISTRIBUTION:")
-    self.add_statement(f"-- With official grades: {stats['with_official_grades']}")
-    self.add_statement(f"-- With draft grades only: {stats['with_draft_grades']}")
-    self.add_statement(f"-- No grades yet: {stats['no_grades_yet']}")
-    self.add_statement(f"-- ")
-    self.add_statement(f"-- GRADE VERSIONS:")
-    self.add_statement(f"-- Total grade versions created: {len(grade_version_rows)}")
-    self.add_statement(f"-- Total grade details created: {len(grade_detail_rows)}")
-    self.add_statement(f"-- ")
-    self.add_statement(f"-- CURRICULUM COMPLETION:")
-    self.add_statement(f"-- Total senior students: {total_senior_students}")
-    self.add_statement(f"-- Seniors with 100% curriculum: {students_with_full_curriculum}")
-    if total_senior_students > 0:
-        completion_rate = (students_with_full_curriculum / total_senior_students * 100)
-        self.add_statement(f"-- Completion rate: {completion_rate:.1f}%")
+    self.add_statement(f"-- Enrollment rate: ~20% of available courses")
+    self.add_statement(f"-- Enrollment cutoff: Fall 2025 (no Spring/Summer 2026)")
     
     # Insert data
     self.bulk_insert('student_enrollment',

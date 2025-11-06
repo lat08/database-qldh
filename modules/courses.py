@@ -54,26 +54,33 @@ def create_courses(self):
     self.add_statement(f"-- Total courses generated: {len(course_rows)}")
     self.bulk_insert('course', ['course_id', 'subject_id', 'semester_id', 'fee_per_credit', 'course_status'], course_rows)
 
+
 def create_course_classes(self):
-    self.add_statement("\n-- ==================== COURSE CLASSES (WITH GRADE SUBMISSION WORKFLOW) ====================")
-    self.add_statement("-- Each course_class has grade submission status tracking")
-    self.add_statement("-- Past courses: approved grades | Current courses: draft/pending grades")
+    """
+    REVISED: Create course classes AFTER calculating student demand
+    - Only create classes if there are students who need them
+    - Create multiple sections based on demand (20-50 students per section)
+    - Skip creation if scheduling conflict exists
+    """
+    self.add_statement("\n-- ==================== COURSE CLASSES (DEMAND-BASED) ====================")
+    self.add_statement("-- Classes created based on student curriculum requirements")
+    self.add_statement("-- Section size: 20-50 students")
+    self.add_statement("-- Skip classes with scheduling conflicts")
     
     course_class_rows = []
     
     # Get admin user for grade approval
     admin_id = self.data['fixed_accounts']['admin']['admin_id']
     
-    # Calculate students per course to determine number of class sessions needed
-    # FIXED: Use curriculum_details instead of cls['curriculum']
-    course_student_counts = defaultdict(set)
+    # Calculate students who NEED each course (based on curriculum)
+    course_demand = defaultdict(set)  # course_id -> set of student_ids
+    
     for student in self.data['students']:
         class_id = student['class_id']
         cls = next((c for c in self.data['classes'] if c['class_id'] == class_id), None)
         if not cls:
             continue
         
-        # Get curriculum_id from class
         curriculum_id = cls.get('curriculum_id')
         if not curriculum_id:
             continue
@@ -87,11 +94,18 @@ def create_course_classes(self):
         if not curriculum_subject_ids:
             continue
         
-        # Match courses that teach these subjects
+        # Find courses for these subjects that student could take
         for course in self.data['courses']:
             if course['subject_id'] in curriculum_subject_ids:
+                # Student can only take courses from their start year onwards
                 if course['start_year'] >= student['class_start_year']:
-                    course_student_counts[course['course_id']].add(student['student_id'])
+                    # Skip future courses (after Fall 2025)
+                    if course['start_year'] > 2025:
+                        continue
+                    if course['start_year'] == 2025 and course['semester_type'] == 'summer':
+                        continue
+                    
+                    course_demand[course['course_id']].add(student['student_id'])
     
     # Day combinations for scheduling
     day_combinations = [
@@ -105,16 +119,14 @@ def create_course_classes(self):
         [5, 6],    # Thu, Fri
     ]
     
-    # Time slots - FIXED: Each slot must stay within the same block
-    # Block 1: periods 1-5 (morning)
-    # Block 2: periods 6-9 (afternoon)
-    # Block 3: periods 10-12 (evening)
+    # Time slots
     time_slots = [
         (1, 5),
         (6, 9),
         (10, 12)
     ]
     
+    # Track room usage: (room_id, semester_id, day, period) -> course_class_id
     room_usage = {}
     
     grade_workflow_stats = {
@@ -123,28 +135,39 @@ def create_course_classes(self):
         'draft': 0
     }
     
+    courses_with_no_demand = 0
+    sections_created = 0
+    sections_skipped = 0
+    
     for course in self.data['courses']:
         total_hours = course['theory_hours'] + course['practice_hours']
         if total_hours == 0:
             continue
         
-        num_students = len(course_student_counts.get(course['course_id'], set()))
+        # Get actual demand
+        potential_students = course_demand.get(course['course_id'], set())
+        num_students = len(potential_students)
+        
         if num_students == 0:
+            courses_with_no_demand += 1
             continue
         
-        max_per_session = 50
-        num_sessions = max(1, (num_students + max_per_session - 1) // max_per_session)
+        # Calculate number of sections needed (20-50 students per section)
+        min_per_section = 20
+        max_per_section = 50
+        num_sections = max(1, (num_students + max_per_section - 1) // max_per_section)
         
-        for session_idx in range(num_sessions):
-            scheduled = False
-            attempts = 0
-            max_attempts = 100
-            
+        for session_idx in range(num_sections):
             # Select instructor
             if course['start_year'] == 2025 and course['semester_type'] == 'fall' and random.random() < 0.3:
                 instructor_id = self.data['fixed_accounts']['instructor']['instructor_id']
             else:
                 instructor_id = random.choice(self.data['instructors'])['instructor_id']
+            
+            # Try to find conflict-free slot
+            scheduled = False
+            attempts = 0
+            max_attempts = 100
             
             while not scheduled and attempts < max_attempts:
                 attempts += 1
@@ -153,10 +176,12 @@ def create_course_classes(self):
                 days = random.choice(day_combinations)
                 time_slot = random.choice(time_slots)
                 
+                # Check for conflicts
                 conflict = False
                 for day in days:
                     for period in range(time_slot[0], time_slot[1] + 1):
-                        if (room['room_id'], day, period) in room_usage:
+                        key = (room['room_id'], course['semester_id'], day, period)
+                        if key in room_usage:
                             conflict = True
                             break
                     if conflict:
@@ -165,16 +190,40 @@ def create_course_classes(self):
                 if not conflict:
                     course_class_id = self.generate_uuid()
                     
+                    # Mark room as used
                     for day in days:
                         for period in range(time_slot[0], time_slot[1] + 1):
-                            room_usage[(room['room_id'], day, period)] = course_class_id
+                            key = (room['room_id'], course['semester_id'], day, period)
+                            room_usage[key] = course_class_id
                     
-                    # Determine grade submission status based on semester
+                    # Calculate dates
+                    course_start_date = course['semester_start']
+                    course_end_date = course['semester_end']
+                    
+                    if isinstance(course_start_date, str):
+                        course_start_date = datetime.strptime(course_start_date, '%Y-%m-%d').date()
+                    if isinstance(course_end_date, str):
+                        course_end_date = datetime.strptime(course_end_date, '%Y-%m-%d').date()
+                    
+                    first_day = days[0]
+                    semester_weekday = course_start_date.weekday()
+                    target_weekday = first_day - 2
+                    days_until_first = (target_weekday - semester_weekday) % 7
+                    actual_start_date = course_start_date + timedelta(days=days_until_first)
+                    
+                    # Set max students for this section
+                    if session_idx == num_sections - 1:
+                        # Last section takes remaining students
+                        remaining = num_students - (session_idx * max_per_section)
+                        session_max_students = min(remaining + 5, max_per_section)  # +5 buffer
+                    else:
+                        session_max_students = random.randint(35, max_per_section)
+                    
+                    # Determine grade submission status
                     is_past = (course['start_year'] < 2025) or \
                              (course['start_year'] == 2025 and course['semester_type'] == 'spring')
                     is_current = (course['start_year'] == 2025 and course['semester_type'] == 'fall')
                     
-                    # Initialize grade workflow fields
                     grade_submission_status = 'draft'
                     grade_submitted_at = None
                     grade_approved_at = None
@@ -183,26 +232,15 @@ def create_course_classes(self):
                     grade_approval_note = None
                     
                     if is_past:
-                        # Past courses: All grades approved
                         grade_submission_status = 'approved'
-                        semester_end_date = course['semester_end']
-                        if isinstance(semester_end_date, str):
-                            semester_end_date = datetime.strptime(semester_end_date, '%Y-%m-%d').date()
+                        semester_end_date = course_end_date
                         submit_date = datetime.combine(semester_end_date, datetime.min.time()) - timedelta(days=random.randint(3, 7))
                         grade_submitted_at = submit_date.strftime('%Y-%m-%d %H:%M:%S')
                         approve_date = submit_date + timedelta(days=random.randint(1, 3))
                         grade_approved_at = approve_date.strftime('%Y-%m-%d %H:%M:%S')
                         grade_approved_by = admin_id
-                        grade_submission_note = random.choice([
-                            'All grades completed and verified',
-                            'Grade submission for final approval',
-                            'Ready for administrative review'
-                        ])
-                        grade_approval_note = random.choice([
-                            'Approved - grades are accurate',
-                            'Verified and approved',
-                            'All grades validated and approved'
-                        ])
+                        grade_submission_note = 'All grades completed and verified'
+                        grade_approval_note = 'Approved - grades are accurate'
                         grade_workflow_stats['approved'] += 1
                     
                     elif is_current:
@@ -214,11 +252,7 @@ def create_course_classes(self):
                             grade_submission_status = 'pending'
                             submit_date = datetime.now() - timedelta(days=random.randint(1, 5))
                             grade_submitted_at = submit_date.strftime('%Y-%m-%d %H:%M:%S')
-                            grade_submission_note = random.choice([
-                                'Midterm grades ready for review',
-                                'Submitting current grades for approval',
-                                'Please review and approve grades'
-                            ])
+                            grade_submission_note = 'Midterm grades ready for review'
                             grade_workflow_stats['pending'] += 1
                         else:
                             grade_submission_status = 'approved'
@@ -248,13 +282,15 @@ def create_course_classes(self):
                         'days': days,
                         'start_period': time_slot[0],
                         'end_period': time_slot[1],
-                        'max_students': max_per_session,
+                        'max_students': session_max_students,
                         'session_number': session_idx + 1,
                         'enrolled_count': 0,
                         'grade_submission_status': grade_submission_status,
                         'grade_submitted_at': grade_submitted_at,
                         'grade_approved_at': grade_approved_at,
-                        'grade_approved_by': grade_approved_by
+                        'grade_approved_by': grade_approved_by,
+                        'grade_submission_note': grade_submission_note,
+                        'grade_approval_note': grade_approval_note
                     })
                     
                     course_class_rows.append([
@@ -262,9 +298,9 @@ def create_course_classes(self):
                         course['course_id'],
                         instructor_id,
                         room['room_id'],
-                        course['semester_start'],
-                        course['semester_end'],
-                        max_per_session,
+                        actual_start_date,
+                        course_end_date,
+                        session_max_students,
                         days[0],
                         time_slot[0],
                         time_slot[1],
@@ -277,86 +313,17 @@ def create_course_classes(self):
                         grade_approval_note
                     ])
                     
+                    sections_created += 1
                     scheduled = True
             
             if not scheduled:
-                # Fallback
-                course_class_id = self.generate_uuid()
-                room = random.choice(self.data['rooms'])
-                days = random.choice(day_combinations)
-                time_slot = random.choice(time_slots)
-                
-                is_past = (course['start_year'] < 2025) or \
-                         (course['start_year'] == 2025 and course['semester_type'] == 'spring')
-                
-                grade_submission_status = 'approved' if is_past else 'draft'
-                grade_submitted_at = None
-                grade_approved_at = None
-                grade_approved_by = None
-                grade_submission_note = None
-                grade_approval_note = None
-                
-                if is_past:
-                    semester_end_date = course['semester_end']
-                    if isinstance(semester_end_date, str):
-                        semester_end_date = datetime.strptime(semester_end_date, '%Y-%m-%d').date()
-                    submit_date = datetime.combine(semester_end_date, datetime.min.time()) - timedelta(days=5)
-                    grade_submitted_at = submit_date.strftime('%Y-%m-%d %H:%M:%S')
-                    approve_date = submit_date + timedelta(days=2)
-                    grade_approved_at = approve_date.strftime('%Y-%m-%d %H:%M:%S')
-                    grade_approved_by = admin_id
-                    grade_submission_note = 'Grade submission for approval'
-                    grade_approval_note = 'Approved'
-                
-                self.data['course_classes'].append({
-                    'course_class_id': course_class_id,
-                    'course_id': course['course_id'],
-                    'subject_id': course['subject_id'],
-                    'subject_code': course['subject_code'],
-                    'subject_name': course['subject_name'],
-                    'semester_id': course['semester_id'],
-                    'semester_start': course['semester_start'],
-                    'semester_end': course['semester_end'],
-                    'start_year': course['start_year'],
-                    'semester_type': course['semester_type'],
-                    'instructor_id': instructor_id,
-                    'room_id': room['room_id'],
-                    'days': days,
-                    'start_period': time_slot[0],
-                    'end_period': time_slot[1],
-                    'max_students': max_per_session,
-                    'session_number': session_idx + 1,
-                    'enrolled_count': 0,
-                    'grade_submission_status': grade_submission_status,
-                    'grade_submitted_at': grade_submitted_at,
-                    'grade_approved_at': grade_approved_at,
-                    'grade_approved_by': grade_approved_by
-                })
-                
-                course_class_rows.append([
-                    course_class_id,
-                    course['course_id'],
-                    instructor_id,
-                    room['room_id'],
-                    course['semester_start'],
-                    course['semester_end'],
-                    max_per_session,
-                    days[0],
-                    time_slot[0],
-                    time_slot[1],
-                    'active',
-                    grade_submission_status,
-                    grade_submitted_at,
-                    grade_approved_at,
-                    grade_approved_by,
-                    grade_submission_note,
-                    grade_approval_note
-                ])
-                
-                self.add_statement(f"-- WARNING: Could not find conflict-free slot for {course['subject_code']} session {session_idx+1}")
+                sections_skipped += 1
+                self.add_statement(f"-- SKIPPED: {course['subject_code']} section {session_idx+1} (no conflict-free slot)")
     
-    self.add_statement(f"\n-- Generated {len(self.data['course_classes'])} course class sections")
-    self.add_statement(f"-- Grade workflow status distribution:")
+    self.add_statement(f"\n-- Courses with no student demand: {courses_with_no_demand}")
+    self.add_statement(f"-- Sections created: {sections_created}")
+    self.add_statement(f"-- Sections skipped (conflicts): {sections_skipped}")
+    self.add_statement(f"-- Grade workflow distribution:")
     self.add_statement(f"--   Approved: {grade_workflow_stats['approved']}")
     self.add_statement(f"--   Pending: {grade_workflow_stats['pending']}")
     self.add_statement(f"--   Draft: {grade_workflow_stats['draft']}")

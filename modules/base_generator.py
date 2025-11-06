@@ -8,6 +8,69 @@ import base64
 from datetime import datetime, date
 from .config import *
 
+def generate_theme_insert_from_file(file_path):
+    """
+    Reads a theme configuration text file and generates SQL INSERT statement.
+    
+    Args:
+        file_path: Path to the text file with theme data
+        
+    Returns:
+        str: SQL INSERT statement
+    """
+    # Step 1: Read and parse the file
+    data = {}
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line and ':' in line:
+                key, value = line.split(':', 1)
+                data[key.strip()] = value.strip()
+    
+    # Step 2: Extract values
+    theme_config_id = data.get('theme_config_id', '')
+    theme_name = data.get('theme_name', '')
+    description = data.get('description', '')
+    created_by_admin_id = data.get('created_by_admin_id', '')
+    scope_type = data.get('scope_type', '')
+    scope_target = data.get('scope_target', '')
+    theme_variables = data.get('theme_variables', '{}')
+    created_at = data.get('created_at', '')
+    updated_at = data.get('updated_at', '')
+    created_by = data.get('created_by', '')
+    updated_by = data.get('updated_by', '')
+    is_deleted = data.get('is_deleted', '0')
+    is_active = data.get('is_active', '1')
+    
+    # Step 3: Format for SQL
+    def sql_format(value, empty_as_null=False):
+        if not value or value == '':
+            return 'NULL' if empty_as_null else "''"
+        return f"N'{value.replace("'", "''")}'"
+    
+    # Step 4: Build SQL INSERT
+    sql = f"""INSERT INTO dbo.theme_configurations (
+    theme_config_id, theme_name, description, created_by_admin_id,
+    scope_type, scope_target, theme_variables, created_at,
+    updated_at, created_by, updated_by, is_deleted, is_active
+) VALUES (
+    '{theme_config_id}',
+    {sql_format(theme_name)},
+    {sql_format(description)},
+    '{created_by_admin_id}',
+    {sql_format(scope_type)},
+    {sql_format(scope_target)},
+    {sql_format(theme_variables)},
+    '{created_at}',
+    {sql_format(updated_at, empty_as_null=True)},
+    {sql_format(created_by, empty_as_null=True)},
+    {sql_format(updated_by, empty_as_null=True)},
+    {is_deleted},
+    {is_active}
+);"""
+    
+    return sql
+
 class SQLDataGenerator:
     def __init__(self, spec_file, media_base_path):
         self.spec_file = spec_file
@@ -209,10 +272,16 @@ class SQLDataGenerator:
         # PHASE 10: REGULATIONS & POLICIES
         # =========================================================================
         self.add_statement("\n-- =========================================================================")
-        self.add_statement("-- PHASE 10: REGULATIONS & POLICIES")
+        self.add_statement("-- PHASE 10: REGULATIONS & POLICIES & THEMES")
         self.add_statement("-- =========================================================================")
         
         self.create_regulations()
+
+        self.add_statement("-- =========================================================================\n\n")
+
+        self.add_statement(generate_theme_insert_from_file(r'database-qldh\theme_configurations.txt'))
+
+        self.add_statement("\n\n-- =========================================================================\n\n")
         
         # =========================================================================
         # FINAL STATISTICS
