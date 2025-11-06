@@ -80,10 +80,10 @@ def create_student_health_insurance(self):
 
 def create_payments(self):
     """
-    REVISED: Create payments for 10% of enrollments (was 50%)
+    REVISED: Create payments for 50% of enrollments (was 50%)
     """
     self.add_statement("\n-- ==================== PAYMENTS ====================")
-    self.add_statement("-- Payment rate: 10% of enrollments")
+    self.add_statement("-- Payment rate: 50% of enrollments")
     
     payment_enrollment_rows = []
     payment_detail_rows = []
@@ -99,7 +99,7 @@ def create_payments(self):
     
     for (student_id, semester_id), enrollments in enrollments_by_student_semester.items():
         # CHANGED: 10% chance of payment (was 50%)
-        if random.random() > 0.10:
+        if random.random() > 0.50:
             continue
         
         payment_id = self.generate_uuid()

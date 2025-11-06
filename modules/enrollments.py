@@ -5,14 +5,14 @@ from .config import *
 def create_student_enrollments(self):
     """
     UPDATED: New enrollment strategy
-    - 20% enrollment rate (not 70%)
-    - 10% of enrollments have payments (not 50%)
+    - 70% enrollment rate
+    - 30% of enrollments have payments (not 50%)
     - NO enrollments beyond Fall 2025
     - Senior students still get 100% curriculum completion
     """
     self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (REVISED) ====================")
-    self.add_statement("-- Enrollment rate: 20% of available courses")
-    self.add_statement("-- Payment rate: 10% of enrollments")
+    self.add_statement("-- Enrollment rate: 70% of available courses")
+    self.add_statement("-- Payment rate: 30% of enrollments")
     self.add_statement("-- Enrollment cutoff: Fall 2025 (no Spring/Summer 2026)")
     self.add_statement("-- Senior students (2021-2022) complete 100% of curriculum")
     
@@ -116,8 +116,8 @@ def create_student_enrollments(self):
                 if course['start_year'] == 2025 and course['semester_type'] == 'summer':
                     continue
             
-            # CHANGED: 20% enrollment rate (was 70%)
-            should_enroll = random.random() < 0.20
+            # CHANGED: 70% enrollment rate
+            should_enroll = random.random() < 0.70
             
             if not should_enroll and not is_senior:
                 skipped_count += 1
