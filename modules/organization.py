@@ -66,36 +66,49 @@ def update_instructor_faculty_assignments(self):
 
 def create_academic_years_and_semesters(self):
     """
-    REVISED: Proper semester transitions with 10-day registration windows
-    - Nov 6, 2025 is in middle of Summer→Fall registration (Nov 1-10)
-    - Timeline: Semester End → 10-day Registration → Next Semester Start
-    - ENFORCED: Start dates are Mondays, End dates are Sundays
+    UPDATED: Proper semester transitions with consistent registration windows
+    - Registration starts 10-15 days before semester (adjusted to Monday)
+    - Registration ends 1 day before semester starts
+    - TODAY (datetime.now()) guaranteed within Fall 2025 registration period
+    - START DATES: Always Monday | END DATES: Always Sunday
+    - Summer 2024-2025 ends on 11/20/2025
+    - Fall 2025 starts on 11/24/2025, registration starts on 11/8/2025
     """
-    from datetime import timedelta
+    from datetime import timedelta, date, datetime
     
-    def adjust_to_monday(d):
-        """Adjust date to next Monday if not already Monday"""
-        days_ahead = 0 - d.weekday()  # Monday is 0
-        if days_ahead <= 0:  # Target day already happened this week or is today
-            days_ahead += 7
-        return d + timedelta(days=days_ahead) if d.weekday() != 0 else d
-    
-    def adjust_to_sunday(d):
-        """Adjust date to previous Sunday if not already Sunday"""
-        days_back = d.weekday() + 1  # Sunday is 6, so days back = weekday + 1
-        if days_back == 7:  # Already Sunday
+    def to_next_monday(d):
+        """Move to next Monday if not already Monday"""
+        days_ahead = (7 - d.weekday()) % 7
+        if days_ahead == 0:
             return d
-        return d - timedelta(days=days_back)
+        return d + timedelta(days=days_ahead)
+    
+    def to_next_sunday(d):
+        """Move to next Sunday if not already Sunday"""
+        days_ahead = (6 - d.weekday()) % 7
+        if days_ahead == 0:
+            return d
+        return d + timedelta(days=days_ahead)
+    
+    def to_prev_monday(d):
+        """Move to previous Monday if not already Monday"""
+        if d.weekday() == 0:
+            return d
+        return d - timedelta(days=d.weekday())
     
     self.add_statement("\n-- ==================== ACADEMIC YEARS & SEMESTERS ====================")
-    self.add_statement("-- 10-day registration window between semesters")
-    self.add_statement("-- Nov 6, 2025 = middle of Summer→Fall registration")
+    self.add_statement("-- Registration starts 10-15 days before semester (Monday)")
+    self.add_statement("-- Registration ends 1 day before semester starts")
+    self.add_statement("-- TODAY (datetime.now()) guaranteed within Fall 2025 registration")
     self.add_statement("-- START DATES: Always Monday | END DATES: Always Sunday")
+    self.add_statement("-- Summer 2024-2025 ends on 11/20/2025")
+    self.add_statement("-- Fall 2025 starts on 11/24/2025, registration starts on 11/8/2025")
     
     ay_rows = []
     sem_rows = []
     
     academic_years_config = self.spec_data.get('academic_years_config', {})
+    TODAY = datetime.now().date()  # Dynamic current date
     
     for year_range, details in academic_years_config.items():
         date_range = details.split('to')
@@ -103,9 +116,8 @@ def create_academic_years_and_semesters(self):
         raw_end = datetime.strptime(date_range[1].split(',')[0].strip(), '%Y-%m-%d').date()
         status = details.split(',')[1].strip()
         
-        # Enforce Monday start and Sunday end
-        start_date = adjust_to_monday(raw_start)
-        end_date = adjust_to_sunday(raw_end)
+        start_date = to_next_monday(raw_start)
+        end_date = to_next_sunday(raw_end)
         
         academic_year_id = self.generate_uuid()
         start_year = int(year_range.split('-')[0])
@@ -119,26 +131,32 @@ def create_academic_years_and_semesters(self):
         
         ay_rows.append([academic_year_id, year_range, start_date, end_date, status])
         
-        # REVISED: Semesters with 10-day gaps for registration
-        # SPECIAL: For 2025-2026, adjust so Nov 6 is in Summer→Fall registration
+        # Define semester base dates
         if start_year == 2025:
-            # Summer 2026 ends Oct 31, Registration Nov 1-10, Fall starts Nov 11
-            raw_semesters = [
-                ('fall', f'Học kỳ 1 ({start_year}-{end_year})', date(2025, 11, 11), date(2025, 12, 31)),
+            # Fall 2025: start on 11/24, registration starts on 11/8
+            semesters_info = [
+                ('fall', f'Học kỳ 1 ({start_year}-{end_year})', date(2025, 11, 24), date(2025, 12, 31)),
                 ('spring', f'Học kỳ 2 ({start_year}-{end_year})', date(end_year, 1, 11), date(end_year, 5, 31)),
                 ('summer', f'Học kỳ hè ({start_year}-{end_year})', date(end_year, 6, 11), date(end_year, 10, 31))
             ]
+        elif start_year == 2024:
+            # Summer 2024-2025: ends on 11/20/2025
+            semesters_info = [
+                ('fall', f'Học kỳ 1 ({start_year}-{end_year})', date(start_year, 9, 11), date(start_year, 12, 31)),
+                ('spring', f'Học kỳ 2 ({start_year}-{end_year})', date(end_year, 1, 11), date(end_year, 5, 31)),
+                ('summer', f'Học kỳ hè ({start_year}-{end_year})', date(end_year, 6, 11), date(2025, 11, 20))
+            ]
         else:
-            raw_semesters = [
+            semesters_info = [
                 ('fall', f'Học kỳ 1 ({start_year}-{end_year})', date(start_year, 9, 11), date(start_year, 12, 31)),
                 ('spring', f'Học kỳ 2 ({start_year}-{end_year})', date(end_year, 1, 11), date(end_year, 5, 31)),
                 ('summer', f'Học kỳ hè ({start_year}-{end_year})', date(end_year, 6, 11), date(end_year, 8, 31))
             ]
         
-        for sem_type, sem_name, raw_start, raw_end in raw_semesters:
-            # Enforce Monday start and Sunday end for semesters
-            sem_start = adjust_to_monday(raw_start)
-            sem_end = adjust_to_sunday(raw_end)
+        for sem_type, sem_name, raw_sem_start, raw_sem_end in semesters_info:
+            # Adjust semester dates to Monday/Sunday
+            sem_start = to_next_monday(raw_sem_start)
+            sem_end = to_next_sunday(raw_sem_end)
             
             semester_id = self.generate_uuid()
             
@@ -153,13 +171,59 @@ def create_academic_years_and_semesters(self):
                 'end_date': sem_end
             })
             
-            # Registration: 10 days before semester start
-            # Registration start should also be a Monday
-            reg_end = sem_start - timedelta(days=1)
-            reg_start = adjust_to_monday(sem_start - timedelta(days=10))
+            # SPECIAL HANDLING FOR FALL 2025: Set fixed dates as required
+            if start_year == 2025 and sem_type == 'fall':
+                # Fixed dates: start on 11/24, registration starts on 11/8
+                sem_start = date(2025, 11, 24)
+                sem_start = to_next_monday(sem_start)  # Ensure it's Monday
+                reg_start = date(2025, 11, 8)
+                reg_end = sem_start - timedelta(days=1)  # 1 day before semester starts
+                
+                # Update the semester start date in data
+                self.data['semesters'][-1]['start_date'] = sem_start
+                
+                # Ensure TODAY is within registration period (if not, adjust registration window)
+                if TODAY < reg_start:
+                    # If TODAY is before registration start, extend registration backward
+                    reg_start = to_prev_monday(TODAY - timedelta(days=2))
+                elif TODAY > reg_end:
+                    # If TODAY is after registration end, extend registration forward
+                    reg_end = TODAY + timedelta(days=2)
+                    sem_start = to_next_monday(reg_end + timedelta(days=1))
+                    self.data['semesters'][-1]['start_date'] = sem_start
+                
+                self.add_statement(f"-- {sem_name}: Fixed dates - Start: {sem_start}, Registration: {reg_start} to {reg_end}")
+                self.add_statement(f"-- TODAY ({TODAY}) is within registration: {reg_start <= TODAY <= reg_end}")
+                
+            else:
+                # NORMAL SEMESTERS: Standard registration calculation
+                # Registration ends 1 day before semester starts
+                reg_end = sem_start - timedelta(days=1)
+                
+                # Registration starts 12 days before semester, adjusted to Monday
+                reg_start_raw = sem_start - timedelta(days=12)
+                reg_start = to_prev_monday(reg_start_raw)
+                
+                # Ensure we have at least 7 days registration period
+                if (reg_end - reg_start).days < 7:
+                    reg_start = reg_end - timedelta(days=7)
+                    reg_start = to_prev_monday(reg_start)
             
-            sem_rows.append([semester_id, sem_name, academic_year_id, sem_type, 
-                           sem_start, sem_end, reg_start, reg_end, 'active'])
+            # Log the registration window
+            days_before = (sem_start - reg_start).days
+            self.add_statement(f"-- {sem_name}: Registration {days_before} days before semester")
+            
+            sem_rows.append([
+                semester_id, 
+                sem_name, 
+                academic_year_id, 
+                sem_type, 
+                sem_start, 
+                sem_end, 
+                reg_start, 
+                reg_end, 
+                'active'
+            ])
     
     self.bulk_insert('academic_year', 
                     ['academic_year_id', 'year_name', 'start_date', 'end_date', 'academic_year_status'], 

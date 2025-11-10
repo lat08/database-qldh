@@ -42,7 +42,7 @@ citizen_id: 000901234999
 address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
 class_year: 2023
 
-[test_student2]
+[test_student3]
 person_id: 00000000-0000-0000-0001-000000000999
 user_id: 00000000-0000-0000-0001-000000000999
 student_id: 00000000-0000-0000-0001-000000000999
@@ -58,6 +58,20 @@ address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
 class_year: 2023
 
 
+[test_student4]
+person_id: 00000000-0000-0000-0002-000000000999
+user_id: 00000000-0000-0000-0002-000000000999
+student_id: 00000000-0000-0000-0002-000000000999
+username: TUANDAT
+email: letandat1709@gmail.com
+full_name: Lê Tấn Đạt
+student_code: SV008
+gender: male
+date_of_birth: 2005-01-15
+phone_number: 0901249999
+citizen_id: 000901249999
+address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
+class_year: 2023
 
 
 # ============================================================

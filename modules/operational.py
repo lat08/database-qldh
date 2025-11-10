@@ -104,7 +104,7 @@ def create_notifications(self):
             created = visible - timedelta(days=random.randint(1, 5))
             
             # Status
-            status = 'sent' if scheduled < base_date else 'pending'
+            status = 'sent' if scheduled < base_date else 'sent'
             if status == 'sent' and random.random() > 0.9:
                 status = 'cancelled'
             

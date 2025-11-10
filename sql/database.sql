@@ -363,7 +363,7 @@ ALTER TABLE faculty
 -- ============================================================
 CREATE TABLE subject (
     subject_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    subject_name NVARCHAR(200) NOT NULL,
+    subject_name NVARCHAR(200) NOT NULL UNIQUE,
     subject_code NVARCHAR(50) NOT NULL UNIQUE,
     credits INT NOT NULL CHECK (credits > 0),
     theory_hours INT DEFAULT 0 CHECK (theory_hours >= 0),
@@ -711,6 +711,7 @@ CREATE TABLE schedule_change (
     start_period INT NOT NULL CHECK (start_period BETWEEN 1 AND 12),
     end_period INT NOT NULL CHECK (end_period BETWEEN 1 AND 12),
     reason NVARCHAR(500),
+    report_file_url NVARCHAR(1000) NULL,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
@@ -1112,6 +1113,28 @@ CREATE TABLE note (
     is_deleted BIT NOT NULL DEFAULT 0,
 );
 
+-- NOTIFICATION USER READ (Lưu trạng thái đọc của từng người dùng)
+-- ============================================================
+CREATE TABLE notification_user_read (
+    notification_user_read_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    schedule_id UNIQUEIDENTIFIER NOT NULL,
+    user_id UNIQUEIDENTIFIER NOT NULL,
+    read_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+
+    CONSTRAINT FK_notification_user_read_schedule FOREIGN KEY (schedule_id) 
+        REFERENCES notification_schedule(schedule_id) ON DELETE CASCADE,
+    CONSTRAINT FK_notification_user_read_user FOREIGN KEY (user_id) 
+        REFERENCES user_account(user_id) ON DELETE CASCADE,
+    
+    -- Đảm bảo mỗi user chỉ có 1 bản ghi đọc cho mỗi thông báo
+    CONSTRAINT UQ_notification_user_read UNIQUE (schedule_id, user_id)
+);
+
+-- Index để tối ưu truy vấn
+CREATE INDEX idx_notification_user_read_user ON notification_user_read(user_id);
+CREATE INDEX idx_notification_user_read_schedule ON notification_user_read(schedule_id);
 
 -- ============================================================
 -- THEME CONFIGURATIONS
