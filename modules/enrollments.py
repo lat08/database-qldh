@@ -128,13 +128,32 @@ def create_student_enrollments(self):
         # Prioritize: summer 2024-2025 > fall 2025 > others
         prioritized_courses = summer_2024_2025_courses + fall_2025_courses + other_courses
         
+        # SPECIAL HANDLING FOR TEST STUDENT: Enroll in more past courses
+        test_student_id = self.data['fixed_accounts'].get('student', {}).get('student_id')
+        is_test_student = student['student_id'] == test_student_id if test_student_id else False
+        
         # FIXED: Enroll in ~70% of eligible courses, but ensure summer 2024-2025 courses are prioritized
-        num_to_enroll = int(len(eligible_courses) * 0.7)
+        # For test student, enroll in ~90% of eligible courses to ensure more past enrollments
+        enrollment_rate = 0.9 if is_test_student else 0.7
+        num_to_enroll = int(len(eligible_courses) * enrollment_rate)
         # Ensure at least some summer 2024-2025 courses are enrolled if available
         if summer_2024_2025_courses and not is_senior:
             # Enroll in at least 50% of summer 2024-2025 courses
             min_summer_enroll = max(1, int(len(summer_2024_2025_courses) * 0.5))
             num_to_enroll = max(num_to_enroll, min_summer_enroll + len(fall_2025_courses))
+        
+        # For test student, ensure they enroll in most past courses (prioritize past over current)
+        if is_test_student:
+            # Separate past courses (completed) from current courses
+            past_courses = [c for c in other_courses if c['start_year'] < 2024 or 
+                           (c['start_year'] == 2024 and c['semester_type'] in ('fall', 'spring'))]
+            current_courses = summer_2024_2025_courses + fall_2025_courses
+            
+            # Enroll in ~95% of past courses and all current courses
+            past_enroll_count = int(len(past_courses) * 0.95)
+            num_to_enroll = max(num_to_enroll, past_enroll_count + len(current_courses))
+            # Re-prioritize: past courses first, then current
+            prioritized_courses = past_courses + current_courses
         
         courses_to_enroll = prioritized_courses[:num_to_enroll] if not is_senior else prioritized_courses
         

@@ -2,47 +2,8 @@ import random
 from datetime import datetime, date, timedelta
 from .config import *
 
-def create_faculties_and_departments(self):
-    self.add_statement("\n-- ==================== FACULTIES & DEPARTMENTS ====================")
-    
-    faculty_rows = []
-    department_rows = []
-    
-    for line in self.spec_data.get('faculties', []):
-        parts = [p.strip() for p in line.split('|')]
-        fac_name, fac_code, dept_names = parts[0], parts[1], [d.strip() for d in parts[2].split(',')]
-        
-        faculty_id = self.generate_uuid()
-        dean_id = random.choice(self.data['instructors'])['instructor_id'] if self.data['instructors'] else None
-        
-        self.data['faculties'].append({
-            'faculty_id': faculty_id, 
-            'faculty_name': fac_name, 
-            'faculty_code': fac_code
-        })
-        
-        faculty_rows.append([faculty_id, fac_name, fac_code, dean_id, 'active'])
-        
-        for idx, dept_name in enumerate(dept_names):
-            dept_id = self.generate_uuid()
-            dept_code = f"{fac_code}D{idx+1}"
-            
-            self.data['departments'].append({
-                'department_id': dept_id,
-                'department_name': dept_name,
-                'department_code': dept_code,
-                'faculty_id': faculty_id
-            })
-            
-            department_rows.append([dept_id, dept_name, dept_code, faculty_id])
-    
-    self.bulk_insert('faculty', 
-                    ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'faculty_status'], 
-                    faculty_rows)
-    
-    self.bulk_insert('department', 
-                    ['department_id', 'department_name', 'department_code', 'faculty_id'], 
-                    department_rows)
+# NOTE: create_faculties_and_departments is defined in people_accounts.py
+# This module only contains functions that depend on faculties/departments existing
 
 def update_instructor_faculty_assignments(self):
     self.add_statement("\n-- ==================== ASSIGNING INSTRUCTORS TO FACULTIES ====================")
@@ -516,7 +477,7 @@ def create_classes(self):
 
 # Register functions
 from modules.base_generator import SQLDataGenerator
-SQLDataGenerator.create_faculties_and_departments = create_faculties_and_departments
+# NOTE: create_faculties_and_departments is registered in people_accounts.py
 SQLDataGenerator.update_instructor_faculty_assignments = update_instructor_faculty_assignments
 SQLDataGenerator.create_training_systems = create_training_systems
 SQLDataGenerator.create_academic_years_and_semesters = create_academic_years_and_semesters

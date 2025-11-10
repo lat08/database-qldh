@@ -86,6 +86,7 @@ class SQLDataGenerator:
             'permissions': [],
             'instructors': [],
             'admins': [],
+            'divisions': [],
             'faculties': [],
             'departments': [],
             'academic_years': [],

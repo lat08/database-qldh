@@ -289,6 +289,21 @@ CREATE TABLE semester (
     CONSTRAINT CHK_semester_registration_before_start CHECK (registration_end_date <= start_date)
 );
 
+CREATE TABLE division (
+    division_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    division_name NVARCHAR(200) NOT NULL,
+    division_code NVARCHAR(50) NOT NULL UNIQUE,
+    division_status NVARCHAR(20) DEFAULT 'active' CHECK (division_status IN ('active','inactive')),
+    dean_id UNIQUEIDENTIFIER NULL,
+
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    is_deleted BIT NOT NULL DEFAULT 0,
+    is_active BIT NOT NULL DEFAULT 1
+);
+
 -- ============================================================
 -- FACULTY
 -- ============================================================
@@ -298,13 +313,17 @@ CREATE TABLE faculty (
     faculty_code NVARCHAR(50) NOT NULL UNIQUE,
     dean_id UNIQUEIDENTIFIER NULL,
     faculty_status NVARCHAR(20) DEFAULT 'active' CHECK (faculty_status IN ('active','inactive')),
+    division_id UNIQUEIDENTIFIER NOT NULL,
 
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     updated_at DATETIME2 NULL,
     created_by UNIQUEIDENTIFIER NULL,
     updated_by UNIQUEIDENTIFIER NULL,
     is_deleted BIT NOT NULL DEFAULT 0,
-    is_active BIT NOT NULL DEFAULT 1
+    is_active BIT NOT NULL DEFAULT 1,
+
+    CONSTRAINT FK_faculty_division FOREIGN KEY (division_id)
+        REFERENCES division(division_id) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -354,9 +373,15 @@ CREATE TABLE instructor (
 );
 
 -- Add circular foreign keys
+ALTER TABLE division 
+    ADD CONSTRAINT FK_division_dean_instructor 
+    FOREIGN KEY (dean_id) REFERENCES instructor(instructor_id) ON DELETE SET NULL;
+
+-- Add circular foreign keys
 ALTER TABLE faculty 
     ADD CONSTRAINT FK_faculty_dean_instructor 
     FOREIGN KEY (dean_id) REFERENCES instructor(instructor_id) ON DELETE SET NULL;
+
 
 -- ============================================================
 -- SUBJECT

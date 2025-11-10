@@ -464,6 +464,35 @@ def create_students(self):
 
 
 def create_faculties_and_departments(self):
+    self.add_statement("\n-- ==================== DIVISIONS ====================")
+    
+    # PHASE 1: Create divisions FIRST
+    division_rows = []
+    division_lookup = {}  # division_code -> division_id
+    
+    for line in self.spec_data.get('divisions', []):
+        parts = [p.strip() for p in line.split('|')]
+        if len(parts) < 2:
+            continue
+        div_name, div_code = parts[0], parts[1]
+        
+        division_id = self.generate_uuid()
+        dean_id = None  # Will be assigned after instructors exist
+        
+        self.data['divisions'].append({
+            'division_id': division_id,
+            'division_name': div_name,
+            'division_code': div_code
+        })
+        
+        division_lookup[div_code] = division_id
+        division_rows.append([division_id, div_name, div_code, 'active', dean_id])
+    
+    if division_rows:
+        self.bulk_insert('division', 
+                        ['division_id', 'division_name', 'division_code', 'division_status', 'dean_id'], 
+                        division_rows)
+    
     self.add_statement("\n-- ==================== FACULTIES & DEPARTMENTS ====================")
     self.add_statement("-- NOTE: Faculties created WITHOUT deans first, deans assigned later")
     
@@ -472,18 +501,31 @@ def create_faculties_and_departments(self):
     
     for line in self.spec_data.get('faculties', []):
         parts = [p.strip() for p in line.split('|')]
-        fac_name, fac_code, dept_names = parts[0], parts[1], [d.strip() for d in parts[2].split(',')]
+        if len(parts) < 4:
+            # Legacy format: FacultyName | FacultyCode | Department1, Department2, ...
+            fac_name, fac_code, dept_names = parts[0], parts[1], [d.strip() for d in parts[2].split(',')]
+            division_code = None
+        else:
+            # New format: FacultyName | FacultyCode | DivisionCode | Department1, Department2, ...
+            fac_name, fac_code, division_code, dept_names = parts[0], parts[1], parts[2], [d.strip() for d in parts[3].split(',')]
         
         faculty_id = self.generate_uuid()
+        
+        # Get division_id if division_code is provided
+        division_id = division_lookup.get(division_code) if division_code else None
+        if division_code and not division_id:
+            self.add_statement(f"-- WARNING: Division code '{division_code}' not found for faculty '{fac_name}'")
         
         self.data['faculties'].append({
             'faculty_id': faculty_id, 
             'faculty_name': fac_name, 
-            'faculty_code': fac_code
+            'faculty_code': fac_code,
+            'division_id': division_id
         })
         
         # Create faculty WITHOUT dean_id (will be assigned after instructors exist)
-        faculty_rows.append([faculty_id, fac_name, fac_code, None, 'active'])
+        # Include division_id in faculty insert
+        faculty_rows.append([faculty_id, fac_name, fac_code, None, 'active', division_id])
         
         # Create departments under this faculty (no head_id needed)
         for idx, dept_name in enumerate(dept_names):
@@ -501,7 +543,7 @@ def create_faculties_and_departments(self):
     
     # Insert faculties
     self.bulk_insert('faculty', 
-                    ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'faculty_status'], 
+                    ['faculty_id', 'faculty_name', 'faculty_code', 'dean_id', 'faculty_status', 'division_id'], 
                     faculty_rows)
     
     # Insert departments (no head_of_department_id)

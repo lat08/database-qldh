@@ -310,15 +310,25 @@ Admin_Facilities | login_system, manage_buildings, manage_rooms, manage_room_ame
 # Registration starts 30 days before, ends 7 days before
 
 # ============================================================
+# DIVISIONS
+# ============================================================
+[divisions]
+# Format: DivisionName | DivisionCode
+
+Khoa học và Công nghệ | KHCN
+Kinh tế và Quản trị | KTEQT
+Khoa học Xã hội và Nhân văn | KHXHNV
+
+# ============================================================
 # FACULTIES & DEPARTMENTS
 # ============================================================
 [faculties]
-# Format: FacultyName | FacultyCode | Department1, Department2, ...
+# Format: FacultyName | FacultyCode | DivisionCode | Department1, Department2, ...
 
-Công nghệ thông tin | CNTT | Khoa học máy tính, Hệ thống thông tin, Kỹ thuật phần mềm
-Kinh tế | KTE | Quản trị kinh doanh, Tài chính - Ngân hàng, Marketing
-Kỹ thuật | KT | Cơ khí, Điện - Điện tử, Xây dựng
-Khoa học tự nhiên | KHTN | Toán học, Vật lý, Hóa học
+Công nghệ thông tin | CNTT | KHCN | Khoa học máy tính, Hệ thống thông tin, Kỹ thuật phần mềm
+Kinh tế | KTE | KTEQT | Quản trị kinh doanh, Tài chính - Ngân hàng, Marketing
+Kỹ thuật | KT | KHCN | Cơ khí, Điện - Điện tử, Xây dựng
+Khoa học tự nhiên | KHTN | KHCN | Toán học, Vật lý, Hóa học
 
 # ============================================================
 # GENERAL SUBJECTS (Common to all students)
