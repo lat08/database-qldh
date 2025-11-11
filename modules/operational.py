@@ -52,7 +52,7 @@ def create_schedule_changes(self):
                     schedule_change_rows)
 
 def create_notifications(self):
-    """Generate 30 notifications per test user (90 total)"""
+    """Generate notifications targeted to different user groups"""
     self.add_statement("\n-- ==================== NOTIFICATIONS ====================")
     
     import random
@@ -61,13 +61,146 @@ def create_notifications(self):
     notification_rows = []
     base_date = datetime.now()
     
-    # Test user IDs
-    users = [
-        '00000000-0000-0000-0000-000000000002',  # student
-        '00000000-0000-0000-0000-000000000012',  # instructor
-        '00000000-0000-0000-0000-000000009999',  # admin
+    # Admin user ID for created_by_user
+    admin_id = self.data['fixed_accounts']['admin']['user_id']
+    
+    # ============================================================
+    # SPECIAL NOTIFICATIONS FOR TEST ACCOUNTS (appended on top)
+    # ============================================================
+    test_notification_templates = [
+        ('important', 'Thông báo đặc biệt cho tài khoản test', 'Đây là thông báo dành riêng cho tài khoản test của bạn', None),
+        ('schedule', 'Lịch thi cuối kỳ - Test Account', 'Vui lòng kiểm tra lịch thi trên Portal. Đây là thông báo test.', None),
+        ('tuition', 'Nhắc nhở học phí - Test Account', 'Vui lòng kiểm tra tình trạng học phí trên Portal', None),
+        ('event', 'Sự kiện đặc biệt - Test Account', 'Thông báo sự kiện dành riêng cho tài khoản test', 'Hội trường A'),
+        ('important', 'Cập nhật thông tin tài khoản', 'Vui lòng cập nhật thông tin cá nhân trên Portal', None),
     ]
-    admin_id = users[2]
+    
+    # Get test student account
+    test_student_account = self.data.get('fixed_accounts', {}).get('student')
+    if test_student_account:
+        test_student_id = test_student_account.get('student_id')
+        test_student_class_id = test_student_account.get('class_id')
+        
+        if test_student_id and test_student_class_id:
+            # Create 20 notifications specifically for test student
+            num_student_notifs = 20
+            for i in range(num_student_notifs):
+                notif_type, title, content, location = random.choice(test_notification_templates)
+                
+                # Schedule in the past few days or upcoming
+                days_offset = random.randint(-5, 3)
+                scheduled = base_date + timedelta(days=days_offset)
+                visible = scheduled - timedelta(days=random.randint(0, 1))
+                created = visible - timedelta(days=random.randint(1, 2))
+                
+                status = 'sent' if scheduled < base_date else 'pending'
+                is_read = 0
+                is_deleted = 0
+                is_active = 1
+                
+                updated = None
+                if random.random() < 0.2:
+                    updated = (created + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+                
+                event_start = None
+                if notif_type == 'event':
+                    event_start = (scheduled + timedelta(days=random.randint(1, 14))).strftime('%Y-%m-%d')
+                
+                schedule_id = self.generate_uuid()
+                
+                # Use 'student' target_type with student_id (targets specific student directly)
+                notification_rows.append([
+                    schedule_id,
+                    notif_type,
+                    title,
+                    content,
+                    scheduled.strftime('%Y-%m-%d'),
+                    visible.strftime('%Y-%m-%d'),
+                    is_read,
+                    'student',  # target_type - direct to student
+                    test_student_id,  # target_id (specific student)
+                    admin_id,
+                    status,
+                    location,
+                    event_start,
+                    created.strftime('%Y-%m-%d %H:%M:%S'),
+                    updated,
+                    is_deleted,
+                    is_active
+                ])
+                
+                # Store for notification_user_read
+                if 'notifications' not in self.data:
+                    self.data['notifications'] = []
+                self.data['notifications'].append({
+                    'schedule_id': schedule_id,
+                    'visible_from': visible
+                })
+            
+            self.add_statement(f"-- Added {num_student_notifs} special notifications for test student (student.test@edu.vn) with target_type='student'")
+    
+    # Get test instructor account
+    test_instructor_account = self.data.get('fixed_accounts', {}).get('instructor')
+    if test_instructor_account:
+        test_instructor_id = test_instructor_account.get('instructor_id')
+        
+        if test_instructor_id:
+            # Create 20 notifications specifically for test instructor
+            num_instructor_notifs = 20
+            for i in range(num_instructor_notifs):
+                notif_type, title, content, location = random.choice(test_notification_templates)
+                
+                # Schedule in the past few days or upcoming
+                days_offset = random.randint(-5, 3)
+                scheduled = base_date + timedelta(days=days_offset)
+                visible = scheduled - timedelta(days=random.randint(0, 1))
+                created = visible - timedelta(days=random.randint(1, 2))
+                
+                status = 'sent' if scheduled < base_date else 'pending'
+                is_read = 0
+                is_deleted = 0
+                is_active = 1
+                
+                updated = None
+                if random.random() < 0.2:
+                    updated = (created + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+                
+                event_start = None
+                if notif_type == 'event':
+                    event_start = (scheduled + timedelta(days=random.randint(1, 14))).strftime('%Y-%m-%d')
+                
+                schedule_id = self.generate_uuid()
+                
+                # Use 'instructor' target_type with instructor_id (targets specific instructor)
+                notification_rows.append([
+                    schedule_id,
+                    notif_type,
+                    title,
+                    content,
+                    scheduled.strftime('%Y-%m-%d'),
+                    visible.strftime('%Y-%m-%d'),
+                    is_read,
+                    'instructor',  # target_type
+                    test_instructor_id,  # target_id (specific instructor)
+                    admin_id,
+                    status,
+                    location,
+                    event_start,
+                    created.strftime('%Y-%m-%d %H:%M:%S'),
+                    updated,
+                    is_deleted,
+                    is_active
+                ])
+                
+                # Store for notification_user_read
+                if 'notifications' not in self.data:
+                    self.data['notifications'] = []
+                self.data['notifications'].append({
+                    'schedule_id': schedule_id,
+                    'visible_from': visible
+                })
+            
+            self.add_statement(f"-- Added {num_instructor_notifs} special notifications for test instructor (instructor.test@edu.vn) with target_type='instructor'")
     
     # Simple notification templates
     titles = [
@@ -92,58 +225,98 @@ def create_notifications(self):
         ('important', 'Xét học bổng HK1', 'GPA>=3.5. Hồ sơ trước 30/12. 2-5 triệu/kỳ', None),
     ]
     
-    for user_id in users:
-        # Generate 30 notifications per user
-        for i in range(30):
-            notif_type, title, content, location = random.choice(titles)
-            
-            # Random timing
-            days_offset = random.randint(-10, 7)
-            scheduled = base_date + timedelta(days=days_offset)
-            visible = scheduled - timedelta(days=random.randint(1, 2))
-            created = visible - timedelta(days=random.randint(1, 5))
-            
-            # Status
-            status = 'sent' if scheduled < base_date else 'sent'
-            if status == 'sent' and random.random() > 0.9:
-                status = 'cancelled'
-            
-            # Read status
-            is_read = 1 if (status == 'sent' and random.random() < 0.7) else 0
-            
-            # Active/deleted
-            is_deleted = 1 if random.random() > 0.97 else 0
-            is_active = 0 if is_deleted else 1
-            
-            # Updated timestamp
-            updated = None
-            if random.random() < 0.3:
-                updated = (created + timedelta(days=random.randint(1, 3))).strftime('%Y-%m-%d %H:%M:%S')
-            
-            # Event fields
-            event_start = None
-            if notif_type == 'event':
-                event_start = (scheduled + timedelta(days=random.randint(1, 21))).strftime('%Y-%m-%d')
-            
-            notification_rows.append([
-                self.generate_uuid(),
-                notif_type,
-                title,
-                content,
-                scheduled.strftime('%Y-%m-%d'),
-                visible.strftime('%Y-%m-%d'),
-                is_read,
-                'all_students',
-                None,
-                admin_id,
-                status,
-                location,
-                event_start,
-                created.strftime('%Y-%m-%d %H:%M:%S'),
-                updated,
-                is_deleted,
-                is_active
-            ])
+    # Available target types with weights
+    target_type_options = [
+        ('all', None, 0.15),                    # 15% - Everyone
+        ('all_students', None, 0.30),          # 30% - All students
+        ('all_instructors', None, 0.15),       # 15% - All instructors
+        ('class', 'class_id', 0.20),           # 20% - Specific class
+        ('faculty', 'faculty_id', 0.15),       # 15% - Specific faculty
+        ('instructor', 'instructor_id', 0.05), # 5% - Specific instructor
+    ]
+    
+    # Generate 40-60 notifications total
+    num_notifications = 200
+    
+    for i in range(num_notifications):
+        notif_type, title, content, location = random.choice(titles)
+        
+        # Random timing
+        days_offset = random.randint(-10, 7)
+        scheduled = base_date + timedelta(days=days_offset)
+        visible = scheduled - timedelta(days=random.randint(1, 2))
+        created = visible - timedelta(days=random.randint(1, 5))
+        
+        # Status
+        status = 'sent' if scheduled < base_date else 'pending'
+        if status == 'sent' and random.random() > 0.9:
+            status = 'cancelled'
+        
+        # Read status - set to 0 (unread) since read status is tracked per-user in notification_user_read table
+        is_read = 0
+        
+        # Active/deleted
+        is_deleted = 1 if random.random() > 0.97 else 0
+        is_active = 0 if is_deleted else 1
+        
+        # Updated timestamp
+        updated = None
+        if random.random() < 0.3:
+            updated = (created + timedelta(days=random.randint(1, 3))).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Event fields
+        event_start = None
+        if notif_type == 'event':
+            event_start = (scheduled + timedelta(days=random.randint(1, 21))).strftime('%Y-%m-%d')
+        
+        # Randomly select target type based on weights
+        rand_val = random.random()
+        cumulative = 0
+        target_type = 'all_students'  # default
+        target_id = None
+        
+        for target, id_field, weight in target_type_options:
+            cumulative += weight
+            if rand_val <= cumulative:
+                target_type = target
+                # Set target_id if needed
+                if id_field == 'class_id' and self.data.get('classes'):
+                    target_id = random.choice(self.data['classes'])['class_id']
+                elif id_field == 'faculty_id' and self.data.get('faculties'):
+                    target_id = random.choice(self.data['faculties'])['faculty_id']
+                elif id_field == 'instructor_id' and self.data.get('instructors'):
+                    target_id = random.choice(self.data['instructors'])['instructor_id']
+                break
+        
+        schedule_id = self.generate_uuid()
+        
+        notification_rows.append([
+            schedule_id,
+            notif_type,
+            title,
+            content,
+            scheduled.strftime('%Y-%m-%d'),
+            visible.strftime('%Y-%m-%d'),
+            is_read,
+            target_type,
+            target_id,
+            admin_id,
+            status,
+            location,
+            event_start,
+            created.strftime('%Y-%m-%d %H:%M:%S'),
+            updated,
+            is_deleted,
+            is_active
+        ])
+        
+        # Store for notification_user_read
+        if 'notifications' not in self.data:
+            self.data['notifications'] = []
+        self.data['notifications'].append({
+            'schedule_id': schedule_id,
+            'visible_from': visible
+        })
     
     self.add_statement(f"-- Generated {len(notification_rows)} notifications")
     
@@ -154,6 +327,60 @@ def create_notifications(self):
                      'event_start_date', 'created_at', 'updated_at', 'is_deleted',
                      'is_active'],
                     notification_rows)
+
+def create_notification_user_read(self):
+    """Simple: Randomly mark 20% of notifications as read for test accounts"""
+    self.add_statement("\n-- ==================== NOTIFICATION USER READ ====================")
+    
+    import random
+    from datetime import datetime, timedelta
+    
+    if not self.data.get('notifications'):
+        self.add_statement("-- WARNING: No notifications found. Run create_notifications first.")
+        return
+    
+    # Get test account user IDs from spec
+    test_student_user_id = None
+    test_instructor_user_id = None
+    
+    # Find test accounts from fixed_accounts
+    for key, account in self.data.get('fixed_accounts', {}).items():
+        if key == 'student' and account.get('user_id'):
+            test_student_user_id = account['user_id']
+        elif key == 'instructor' and account.get('user_id'):
+            test_instructor_user_id = account['user_id']
+    
+    if not test_student_user_id or not test_instructor_user_id:
+        self.add_statement("-- WARNING: Test account user IDs not found")
+        return
+    
+    read_rows = []
+    base_date = datetime.now()
+    
+    # For each test account, randomly mark 20% of notifications as read
+    for user_id in [test_student_user_id, test_instructor_user_id]:
+        # Get 20% of notifications randomly
+        num_to_read = max(1, int(len(self.data['notifications']) * 0.2))
+        selected_notifications = random.sample(self.data['notifications'], num_to_read)
+        
+        for notif in selected_notifications:
+            # Random read_at time (within last 30 days)
+            days_ago = random.randint(0, 30)
+            read_at = base_date - timedelta(days=days_ago, hours=random.randint(0, 23))
+            
+            read_rows.append([
+                self.generate_uuid(),
+                notif['schedule_id'],
+                user_id,
+                read_at.strftime('%Y-%m-%d %H:%M:%S')
+            ])
+    
+    self.add_statement(f"-- Generated {len(read_rows)} notification_user_read entries (20% of notifications for each test account)")
+    
+    if read_rows:
+        self.bulk_insert('notification_user_read',
+                        ['notification_user_read_id', 'schedule_id', 'user_id', 'read_at'],
+                        read_rows)
 
 def create_documents(self):
     """
@@ -448,6 +675,7 @@ SQLDataGenerator.create_notes = create_notes
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_schedule_changes = create_schedule_changes
 SQLDataGenerator.create_notifications = create_notifications
+SQLDataGenerator.create_notification_user_read = create_notification_user_read
 SQLDataGenerator.create_documents = create_documents
 SQLDataGenerator.create_regulations = create_regulations
 SQLDataGenerator.create_notes = create_notes

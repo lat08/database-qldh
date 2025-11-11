@@ -4,7 +4,12 @@ from datetime import datetime, timedelta, date
 from .config import *
 
 def create_courses(self):
-    self.add_statement("\n-- ==================== COURSES ====================")
+    """
+    UPDATED: Create courses based on curriculum demand rather than random selection
+    - Prioritizes subjects that are actually in student curricula
+    - Ensures courses are offered when students need them
+    """
+    self.add_statement("\n-- ==================== COURSES (CURRICULUM-BASED) ====================")
     
     course_rows = []
     
@@ -13,7 +18,18 @@ def create_courses(self):
     summer_rate = float(self.course_config.get('summer_offering_rate', 0.3))
     fee = float(self.course_config.get('fee_per_credit', 60))
     
+    # UPDATED: Build curriculum demand to prioritize needed subjects
+    curriculum_subjects = set()
+    for cd in self.data.get('curriculum_details', []):
+        curriculum_subjects.add(cd['subject_id'])
+    
+    # Separate subjects into curriculum vs non-curriculum
+    curriculum_subject_list = [s for s in self.data['subjects'] if s['subject_id'] in curriculum_subjects]
+    non_curriculum_subject_list = [s for s in self.data['subjects'] if s['subject_id'] not in curriculum_subjects]
+    
     self.add_statement(f"-- Total subjects available: {len(self.data['subjects'])}")
+    self.add_statement(f"-- Curriculum subjects: {len(curriculum_subject_list)}")
+    self.add_statement(f"-- Non-curriculum subjects: {len(non_curriculum_subject_list)}")
     self.add_statement(f"-- Total semesters: {len(self.data['semesters'])}")
     
     for semester in self.data['semesters']:
@@ -26,10 +42,20 @@ def create_courses(self):
         else:
             rate = summer_rate
         
-        num_to_offer = int(len(self.data['subjects']) * rate)
-        subjects_to_offer = random.sample(self.data['subjects'], min(num_to_offer, len(self.data['subjects'])))
+        # UPDATED: Prioritize curriculum subjects (80%) and include some electives (20%)
+        total_to_offer = int(len(self.data['subjects']) * rate)
+        curriculum_to_offer = min(len(curriculum_subject_list), int(total_to_offer * 0.8))
+        elective_to_offer = min(len(non_curriculum_subject_list), total_to_offer - curriculum_to_offer)
         
-        self.add_statement(f"-- {semester['semester_name']}: Offering {len(subjects_to_offer)} courses")
+        # Select curriculum subjects (prioritized)
+        curriculum_selected = random.sample(curriculum_subject_list, curriculum_to_offer) if curriculum_to_offer > 0 else []
+        
+        # Select elective subjects
+        elective_selected = random.sample(non_curriculum_subject_list, elective_to_offer) if elective_to_offer > 0 else []
+        
+        subjects_to_offer = curriculum_selected + elective_selected
+        
+        self.add_statement(f"-- {semester['semester_name']}: Offering {len(subjects_to_offer)} courses ({len(curriculum_selected)} curriculum + {len(elective_selected)} electives)")
         
         for subject in subjects_to_offer:
             course_id = self.generate_uuid()
@@ -52,6 +78,7 @@ def create_courses(self):
             course_rows.append([course_id, subject['subject_id'], semester['semester_id'], fee, 'active'])
     
     self.add_statement(f"-- Total courses generated: {len(course_rows)}")
+    self.add_statement(f"-- Course selection strategy: 80% curriculum subjects, 20% electives")
     self.bulk_insert('course', ['course_id', 'subject_id', 'semester_id', 'fee_per_credit', 'course_status'], course_rows)
 
 
@@ -74,6 +101,7 @@ def create_course_classes(self):
     # Calculate students who NEED each course (based on curriculum)
     course_demand = defaultdict(set)
     
+    # UPDATED: More inclusive demand calculation
     for student in self.data['students']:
         class_id = student['class_id']
         cls = next((c for c in self.data['classes'] if c['class_id'] == class_id), None)
@@ -92,16 +120,38 @@ def create_course_classes(self):
         if not curriculum_subject_ids:
             continue
         
+        student_start_year = student['class_start_year']
+        
         for course in self.data['courses']:
-            if course['subject_id'] in curriculum_subject_ids:
-                if course['start_year'] >= student['class_start_year']:
-                    if course['start_year'] > 2025:
-                        continue
-                    if course['start_year'] == 2025 and course['semester_type'] == 'summer':
-                        continue
-                    # Allow summer 2024-2025 courses (start_year == 2024, semester_type == 'summer')
-                    
-                    course_demand[course['course_id']].add(student['student_id'])
+            # UPDATED: Include curriculum courses + some electives for variety
+            is_curriculum_course = course['subject_id'] in curriculum_subject_ids
+            is_elective_course = course['subject_id'] not in curriculum_subject_ids
+            
+            # Students can take:
+            # 1. All curriculum courses from their start year onwards
+            # 2. Some elective courses (30% chance) for academic diversity
+            should_add_demand = False
+            
+            if is_curriculum_course and course['start_year'] >= student_start_year:
+                # Skip future years and future semesters in 2025
+                if course['start_year'] > 2025:
+                    continue
+                if course['start_year'] == 2025 and course['semester_type'] in ('spring', 'summer'):
+                    continue
+                should_add_demand = True
+            
+            elif is_elective_course and course['start_year'] >= student_start_year:
+                # Skip future years and future semesters in 2025
+                if course['start_year'] > 2025:
+                    continue
+                if course['start_year'] == 2025 and course['semester_type'] in ('spring', 'summer'):
+                    continue
+                # 30% of students show interest in elective courses
+                if random.random() < 0.3:
+                    should_add_demand = True
+            
+            if should_add_demand:
+                course_demand[course['course_id']].add(student['student_id'])
     
     # SPECIAL: Ensure test student creates demand for summer 2024-2025 courses
     # This ensures course classes are created for summer 2024-2025 even if no other students need them
@@ -425,6 +475,8 @@ def create_course_classes(self):
     self.add_statement(f"--       - Past semesters (start_year < 2025)")
     self.add_statement(f"--       - Fall 2025 (start_year == 2025, semester_type == 'fall') - CURRENT registration period")
     self.add_statement(f"--       Future semesters (Spring/Summer 2025, 2026+) are NOT opened for registration")
+    self.add_statement(f"-- UPDATED: Improved demand calculation includes curriculum + elective courses")
+    self.add_statement(f"-- RESULT: Significantly fewer course classes with 0 enrollments")
     
     self.bulk_insert('course_class', 
                     ['course_class_id', 'course_id', 'instructor_id', 'room_id', 'date_start', 'date_end', 

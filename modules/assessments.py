@@ -25,6 +25,10 @@ def create_exams_and_exam_entries(self):
     # Track created exams by course_id to avoid duplicates
     exams_by_course = {}
     
+    # GLOBAL: Track room usage across ALL courses to prevent conflicts
+    # Key: (room_id, date_str, hour, minute) -> True
+    global_exam_room_usage = {}
+    
     # Group course_classes by course
     course_classes_by_course = defaultdict(list)
     for cc in self.data['course_classes']:
@@ -55,6 +59,10 @@ def create_exams_and_exam_entries(self):
     for course_id, course_classes in course_classes_by_course.items():
         course = next((c for c in self.data['courses'] if c['course_id'] == course_id), None)
         if not course:
+            continue
+            
+        # Skip if this course already has an exam (prevent duplicates)
+        if course_id in exams_by_course:
             continue
         
         # ============================================================
@@ -219,25 +227,107 @@ def create_exams_and_exam_entries(self):
             (16, 0, 120),   # 4:00 PM, 2 hours
         ]
         
-        # Track room usage: (room_id, datetime) -> True
-        exam_room_usage = {}
+        # Use GLOBAL room usage tracking to prevent conflicts across all courses
+        # (not local to this course group)
         
         for cc in course_classes:
             # Try to schedule exam without conflicts
             exam_scheduled = False
             
-            for attempt in range(20):
+            for attempt in range(50):  # Increased attempts
                 exam_date = random.choice(exam_dates)
                 hour, minute, duration = random.choice(exam_slots)
                 start_time = datetime.combine(exam_date, datetime.min.time().replace(hour=hour, minute=minute))
                 room = random.choice(self.data['rooms'])
                 
-                key = (room['room_id'], start_time)
-                if key not in exam_room_usage:
-                    exam_room_usage[key] = True
+                # Create conflict check key: room + date + time slot
+                date_str = exam_date.strftime('%Y-%m-%d')
+                key = (room['room_id'], date_str, hour, minute)
+                
+                # Check for room conflicts (same room, same date, overlapping time)
+                room_conflict = False
+                
+                # Simple check: if exact same room, date, hour, minute already exists, it's a conflict
+                if key in global_exam_room_usage:
+                    room_conflict = True
+                else:
+                    # Check for time overlap (2-hour slots)
+                    for existing_key in global_exam_room_usage:
+                        existing_room, existing_date, existing_hour, existing_minute = existing_key
+                        if (existing_room == room['room_id'] and 
+                            existing_date == date_str):
+                            
+                            existing_start_minutes = existing_hour * 60 + existing_minute
+                            existing_end_minutes = existing_start_minutes + 120  # 2 hours
+                            current_start_minutes = hour * 60 + minute
+                            current_end_minutes = current_start_minutes + 120
+                            
+                            # Check overlap
+                            if not (current_end_minutes <= existing_start_minutes or 
+                                   current_start_minutes >= existing_end_minutes):
+                                room_conflict = True
+                                break
+                
+                if not room_conflict:
+                    # Try to find an instructor who doesn't have conflicts
+                    monitor_instructor = None
+                    
+                    # Shuffle the instructor list to get variety
+                    potential_instructors = list(self.data['instructors'])
+                    random.shuffle(potential_instructors)
+                    
+                    for potential_instructor in potential_instructors:
+                        instructor_id = potential_instructor['instructor_id']
+                        
+                        # Check if this instructor has course classes at the same time
+                        instructor_conflict = False
+                        exam_weekday = exam_date.weekday() + 2  # Convert to 1-7 (Monday=2, Tuesday=3, etc.)
+                        
+                        for course_class in self.data['course_classes']:
+                            if course_class['instructor_id'] == instructor_id:
+                                # Check if course class is in the same semester and has overlapping time
+                                cc_days = course_class.get('days', [])
+                                if exam_weekday in cc_days:
+                                    cc_start = course_class.get('start_period', 0)
+                                    cc_end = course_class.get('end_period', 0)
+                                    
+                                    # Convert exam time to periods more accurately
+                                    # Period 1 = 6:00-7:00, Period 2 = 7:00-8:00, etc.
+                                    # So 7:30 AM = Period 2, 13:30 PM = Period 8
+                                    if hour <= 6:
+                                        exam_start_period = 1
+                                    elif hour <= 12:
+                                        exam_start_period = hour - 5  # 7:00 AM = Period 2
+                                    else:
+                                        exam_start_period = hour - 5  # 13:00 PM = Period 8
+                                    
+                                    exam_end_period = exam_start_period + 1  # 2-hour exam = 2 periods
+                                    
+                                    # Check for period overlap
+                                    if not (exam_end_period <= cc_start or exam_start_period >= cc_end):
+                                        instructor_conflict = True
+                                        break
+                        
+                        if not instructor_conflict:
+                            monitor_instructor = potential_instructor
+                            break
+                    
+                    if monitor_instructor is None:
+                        # Fallback: use any instructor if no conflict-free one found
+                        # But prefer someone who's NOT the test instructor to avoid conflicts
+                        test_instructor_id = self.data['fixed_accounts'].get('instructor', {}).get('instructor_id')
+                        available_instructors = [
+                            instr for instr in self.data['instructors']
+                            if instr['instructor_id'] != test_instructor_id
+                        ]
+                        if available_instructors:
+                            monitor_instructor = random.choice(available_instructors)
+                        else:
+                            monitor_instructor = random.choice(self.data['instructors'])
+                    
+                    global_exam_room_usage[key] = True
                     
                     exam_class_id = self.generate_uuid()
-                    monitor_instructor = random.choice(self.data['instructors'])
                     
                     exam_class_rows.append([
                         exam_class_id,
@@ -263,66 +353,131 @@ def create_exams_and_exam_entries(self):
                     break
             
             if not exam_scheduled:
-                # Fallback: schedule anyway (may conflict)
-                exam_date = random.choice(exam_dates)
-                hour, minute, duration = random.choice(exam_slots)
-                start_time = datetime.combine(exam_date, datetime.min.time().replace(hour=hour, minute=minute))
-                room = random.choice(self.data['rooms'])
+                # Fallback: try different room and time combinations more systematically
+                fallback_scheduled = False
+                for backup_room in self.data['rooms']:
+                    if fallback_scheduled:
+                        break
+                    for backup_date in exam_dates:
+                        if fallback_scheduled:
+                            break
+                        for backup_hour, backup_minute, backup_duration in exam_slots:
+                            backup_start_time = datetime.combine(backup_date, datetime.min.time().replace(hour=backup_hour, minute=backup_minute))
+                            
+                            # Check for conflicts with this backup combination
+                            backup_date_str = backup_date.strftime('%Y-%m-%d')
+                            backup_key = (backup_room['room_id'], backup_date_str, backup_hour, backup_minute)
+                            
+                            backup_conflict = False
+                            for existing_key in global_exam_room_usage:
+                                existing_room, existing_date, existing_hour, existing_minute = existing_key
+                                if (existing_room == backup_room['room_id'] and 
+                                    existing_date == backup_date_str):
+                                    # Check for time overlap
+                                    existing_start_minutes = existing_hour * 60 + existing_minute
+                                    existing_end_minutes = existing_start_minutes + 120
+                                    backup_start_minutes = backup_hour * 60 + backup_minute
+                                    backup_end_minutes = backup_start_minutes + 120
+                                    
+                                    if not (backup_end_minutes <= existing_start_minutes or 
+                                           backup_start_minutes >= existing_end_minutes):
+                                        backup_conflict = True
+                                        break
+                            
+                            if not backup_conflict:
+                                # Try to find an instructor who doesn't have conflicts for fallback
+                                monitor_instructor = None
+                                for potential_instructor in self.data['instructors']:
+                                    instructor_id = potential_instructor['instructor_id']
+                                    
+                                    # Check if this instructor has course classes at the same time
+                                    instructor_conflict = False
+                                    backup_weekday = backup_date.weekday() + 1  # Convert to 1-7 (Monday=1)
+                                    
+                                    for course_class in self.data['course_classes']:
+                                        if course_class['instructor_id'] == instructor_id:
+                                            # Check if course class is in the same semester and has overlapping time
+                                            cc_days = course_class.get('days', [])
+                                            if backup_weekday in cc_days:
+                                                cc_start = course_class.get('start_period', 0)
+                                                cc_end = course_class.get('end_period', 0)
+                                                
+                                                # Convert exam time to periods (approximately)
+                                                exam_period = backup_hour - 6  # Rough conversion: 7:00 AM = period 1
+                                                exam_end_period = exam_period + 2  # 2-hour exam
+                                                
+                                                # Check for period overlap
+                                                if not (exam_end_period <= cc_start or exam_period >= cc_end):
+                                                    instructor_conflict = True
+                                                    break
+                                    
+                                    if not instructor_conflict:
+                                        monitor_instructor = potential_instructor
+                                        break
+                                
+                                if monitor_instructor is None:
+                                    # Fallback: use any instructor if no conflict-free one found
+                                    monitor_instructor = random.choice(self.data['instructors'])
+                                
+                                global_exam_room_usage[backup_key] = True
+                                
+                                exam_class_id = self.generate_uuid()
+                                
+                                exam_class_rows.append([
+                                    exam_class_id,
+                                    exam_id,
+                                    cc['course_class_id'],
+                                    backup_room['room_id'],
+                                    monitor_instructor['instructor_id'],
+                                    backup_start_time,
+                                    backup_duration,
+                                    'scheduled'
+                                ])
+                                
+                                self.data['exam_classes'].append({
+                                    'exam_class_id': exam_class_id,
+                                    'exam_id': exam_id,
+                                    'course_class_id': cc['course_class_id'],
+                                    'room_id': backup_room['room_id'],
+                                    'start_time': backup_start_time
+                                })
+                                
+                                fallback_scheduled = True
+                                break
                 
-                exam_class_id = self.generate_uuid()
-                monitor_instructor = random.choice(self.data['instructors'])
-                
-                exam_class_rows.append([
-                    exam_class_id,
-                    exam_id,
-                    cc['course_class_id'],
-                    room['room_id'],
-                    monitor_instructor['instructor_id'],
-                    start_time,
-                    duration,
-                    'scheduled'
-                ])
-                
-                # Store in self.data for fallback case
-                self.data['exam_classes'].append({
-                    'exam_class_id': exam_class_id,
-                    'exam_id': exam_id,
-                    'course_class_id': cc['course_class_id'],
-                    'room_id': room['room_id'],
-                    'start_time': start_time
-                })
+                # If still not scheduled, skip this exam to avoid conflicts
+                if not fallback_scheduled:
+                    self.add_statement(f"-- WARNING: Could not schedule exam for course_class {cc['course_class_id']} without conflicts")
     
-    # SPECIAL HANDLING FOR TEST STUDENT: Create exam schedules for summer 2024-2025 courses
+    # SPECIAL HANDLING FOR ALL TEST STUDENTS: Create exam schedules for summer 2024-2025 courses
     # with specific dates: 2 exams on 11/6 (completed), 2 on 11/12 (upcoming), 2 on 11/19 (scheduled)
-    test_student_id = self.data['fixed_accounts'].get('student', {}).get('student_id')
-    if test_student_id:
+    # Process each test student
+    for account_name, account_data in self.data.get('fixed_accounts', {}).items():
+        if not account_name.startswith('student'):
+            continue
+        test_student_id = account_data.get('student_id')
+        if not test_student_id:
+            continue
         from datetime import date
         TODAY = datetime.now().date()
         
-        # Calculate exam dates relative to TODAY
-        # Target dates: 11/6, 11/12, 11/19
-        # These dates should work for any TODAY:
-        # - If TODAY is before 11/6: use current year, all exams are future
-        # - If TODAY is between 11/6 and 11/12: use current year, 11/6 is past, others are future
-        # - If TODAY is between 11/12 and 11/19: use current year, 11/6 and 11/12 are past, 11/19 is future
-        # - If TODAY is after 11/19: use next year's dates
+        # Calculate exam dates relative to TODAY (November 12, 2025)
+        # REQUIREMENTS: 
+        # - 2 exams already done (past dates) 
+        # - 2 exams upcoming (within 7 days from today)
+        # - 2 exams in far future (beyond 7 days from today)
         
-        # Calculate target dates based on year
-        current_year = TODAY.year
-        target_date_past = date(current_year, 11, 6)
-        target_date_upcoming = date(current_year, 11, 12)
-        target_date_future = date(current_year, 11, 19)
+        # Past exams: 3 and 5 days ago (completed)
+        exam_date_past_1 = TODAY - timedelta(days=3)      # Nov 9, 2025
+        exam_date_past_2 = TODAY - timedelta(days=5)      # Nov 7, 2025
         
-        # If we're past 11/19, use next year's dates for all
-        if TODAY > target_date_future:
-            exam_date_past = date(current_year + 1, 11, 6)
-            exam_date_upcoming = date(current_year + 1, 11, 12)
-            exam_date_future = date(current_year + 1, 11, 19)
-        else:
-            # Use current year's dates
-            exam_date_past = target_date_past
-            exam_date_upcoming = target_date_upcoming
-            exam_date_future = target_date_future
+        # Near future exams: 2 and 4 days from today (upcoming, within 7 days)
+        exam_date_upcoming_1 = TODAY + timedelta(days=2)  # Nov 14, 2025
+        exam_date_upcoming_2 = TODAY + timedelta(days=4)  # Nov 16, 2025
+        
+        # Far future exams: 10 and 12 days from today (beyond 7 days)
+        exam_date_future_1 = TODAY + timedelta(days=10)   # Nov 22, 2025
+        exam_date_future_2 = TODAY + timedelta(days=12)   # Nov 24, 2025
         
         # Find summer 2024-2025 semester
         # Summer 2024-2025: academic year is 2024-2025 (start_year=2024, end_year=2025)
@@ -362,12 +517,22 @@ def create_exams_and_exam_entries(self):
             
             # Remove exam_class entries that were already created for these course classes
             exam_class_rows_to_remove = []
+            self.data_exam_classes_to_remove = []
+            
             for i in range(len(exam_class_rows) - 1, -1, -1):
                 if exam_class_rows[i][2] in test_student_course_class_ids:  # course_class_id is at index 2
                     exam_class_rows_to_remove.append(exam_class_rows.pop(i))
             
+            # Also remove from self.data['exam_classes']
+            for i in range(len(self.data['exam_classes']) - 1, -1, -1):
+                if self.data['exam_classes'][i]['course_class_id'] in test_student_course_class_ids:
+                    self.data_exam_classes_to_remove.append(self.data['exam_classes'].pop(i))
+            
             if exam_class_rows_to_remove:
                 self.add_statement(f"-- TEST STUDENT: Removed {len(exam_class_rows_to_remove)} existing exam_class entries to override with specific dates")
+            
+            # Note: We do NOT clear global_exam_room_usage here because we want to respect existing conflicts
+            # The test student logic will find available time slots that don't conflict with regular exams
             
             # Work with available course classes (even if less than 6, we'll still create exams)
             # But try to ensure we have at least 6 enrollments
@@ -388,43 +553,63 @@ def create_exams_and_exam_entries(self):
                             'course_class': cc
                         })
                 
-                # Assign exam dates: distribute across 11/6, 11/12, 11/19
-                # If we have 6 courses: 2 on each date
-                # If we have fewer: distribute evenly
+                # Assign exam dates: distribute across past, upcoming, future
+                # FIXED DISTRIBUTION: Ensure exactly 2 exams in each period
                 num_courses = len(test_student_courses)
                 if num_courses >= 6:
+                    # 6 courses: 2 past + 2 upcoming + 2 future
                     exam_date_assignments = [
-                        (exam_date_past, 2),      # 2 exams on 11/6
-                        (exam_date_upcoming, 2),  # 2 exams on 11/12
-                        (exam_date_future, 2),    # 2 exams on 11/19
+                        (exam_date_past_1, 1),      # 1 exam 3 days ago
+                        (exam_date_past_2, 1),      # 1 exam 5 days ago  
+                        (exam_date_upcoming_1, 1),  # 1 exam in 2 days
+                        (exam_date_upcoming_2, 1),  # 1 exam in 4 days
+                        (exam_date_future_1, 1),    # 1 exam in 10 days
+                        (exam_date_future_2, 1),    # 1 exam in 12 days
                     ]
                 elif num_courses == 5:
+                    # 5 courses: 2 past + 2 upcoming + 1 future  
                     exam_date_assignments = [
-                        (exam_date_past, 2),      # 2 exams on 11/6
-                        (exam_date_upcoming, 2),  # 2 exams on 11/12
-                        (exam_date_future, 1),    # 1 exam on 11/19
+                        (exam_date_past_1, 1),      # 1 exam in past
+                        (exam_date_past_2, 1),      # 1 exam in past
+                        (exam_date_upcoming_1, 1),  # 1 exam upcoming
+                        (exam_date_upcoming_2, 1),  # 1 exam upcoming
+                        (exam_date_future_1, 1),    # 1 exam future
                     ]
                 elif num_courses == 4:
+                    # 4 courses: 1 past + 2 upcoming + 1 future
                     exam_date_assignments = [
-                        (exam_date_past, 1),      # 1 exam on 11/6
-                        (exam_date_upcoming, 1),  # 1 exam on 11/12
-                        (exam_date_future, 2),    # 2 exams on 11/19
-                    ]
-                elif num_courses == 3:
-                    exam_date_assignments = [
-                        (exam_date_past, 1),      # 1 exam on 11/6
-                        (exam_date_upcoming, 1),  # 1 exam on 11/12
-                        (exam_date_future, 1),    # 1 exam on 11/19
-                    ]
-                elif num_courses == 2:
-                    exam_date_assignments = [
-                        (exam_date_past, 1),      # 1 exam on 11/6
-                        (exam_date_upcoming, 1),  # 1 exam on 11/12
+                        (exam_date_past_1, 1),      # 1 exam in past
+                        (exam_date_upcoming_1, 1),  # 1 exam upcoming
+                        (exam_date_upcoming_2, 1),  # 1 exam upcoming
+                        (exam_date_future_1, 1),    # 1 exam future
                     ]
                 else:
+                    # Less than 4 courses: distribute as evenly as possible
                     exam_date_assignments = [
-                        (exam_date_past, num_courses),  # All on 11/6
+                        (exam_date_past_1, min(1, num_courses)),
+                        (exam_date_upcoming_1, min(1, max(0, num_courses - 1))),
+                        (exam_date_future_1, min(1, max(0, num_courses - 2))),
                     ]
+                    # Remove zero-count assignments
+                    exam_date_assignments = [(date, count) for date, count in exam_date_assignments if count > 0]
+                
+                # Exam time slots: (hour, minute, duration_minutes)
+                exam_slots = [
+                    (7, 30, 120),   # 7:30 AM, 2 hours
+                    (10, 0, 120),   # 10:00 AM, 2 hours
+                    (13, 30, 120),  # 1:30 PM, 2 hours
+                    (16, 0, 120),   # 4:00 PM, 2 hours
+                ]
+                
+                # Track which time slots are used for each specific date to prevent conflicts
+                # Each date gets its own tracking to ensure unique time slots
+                date_slot_usage = {}
+                for target_date in [exam_date_past_1, exam_date_past_2, exam_date_upcoming_1, 
+                                   exam_date_upcoming_2, exam_date_future_1, exam_date_future_2]:
+                    date_slot_usage[target_date.strftime('%Y-%m-%d')] = set()
+                
+                # Also track room usage per date+time to avoid double booking
+                date_time_room_usage = {}
                 
                 course_idx = 0
                 for exam_date, count in exam_date_assignments:
@@ -433,6 +618,8 @@ def create_exams_and_exam_entries(self):
                         exam_status = 'completed'  # Already taken
                     else:
                         exam_status = 'scheduled'  # Upcoming or future
+                    
+                    exam_date_str = exam_date.strftime('%Y-%m-%d')
                     
                     for i in range(count):
                         if course_idx >= len(test_student_courses):
@@ -505,39 +692,230 @@ def create_exams_and_exam_entries(self):
                                 datetime.now() - timedelta(days=random.randint(5, 30))  # reviewed_at
                             ])
                         
-                        # Create exam_class with specific date and status
-                        exam_class_id = self.generate_uuid()
-                        room = random.choice(self.data['rooms'])
-                        monitor_instructor = random.choice(self.data['instructors'])
+                        # Find an available time slot for this specific date
+                        exam_scheduled = False
                         
-                        # Exam time: 8:00 AM
-                        exam_datetime = datetime.combine(exam_date, datetime.min.time().replace(hour=8, minute=0))
-                        duration_minutes = 120
+                        # Get already used slots for this date from our local tracking
+                        used_slots_for_date = date_slot_usage[exam_date_str]
                         
-                        exam_class_rows.append([
-                            exam_class_id,
-                            exam_id,
-                            cc['course_class_id'],
-                            room['room_id'],
-                            monitor_instructor['instructor_id'],
-                            exam_datetime,
-                            duration_minutes,
-                            exam_status
-                        ])
+                        # Shuffle slots to avoid always using the first one
+                        slot_indices = list(range(len(exam_slots)))
+                        random.shuffle(slot_indices)
                         
-                        self.data['exam_classes'].append({
-                            'exam_class_id': exam_class_id,
-                            'exam_id': exam_id,
-                            'course_class_id': cc['course_class_id'],
-                            'room_id': room['room_id'],
-                            'start_time': exam_datetime
-                        })
+                        # Try to find an unused time slot
+                        for slot_idx in slot_indices:
+                            if slot_idx in used_slots_for_date:
+                                continue  # This slot is already used for this date
+                            
+                            hour, minute, slot_duration = exam_slots[slot_idx]
+                            
+                            # Create unique key for this date+time combination (GLOBAL check)
+                            date_time_key = f"{exam_date_str}_{hour:02d}_{minute:02d}"
+                            
+                            # STRICT: Skip if this exact date+time is already used by ANY student
+                            if date_time_key in date_time_room_usage:
+                                continue
+                            
+                            # Try different rooms for this time slot
+                            available_rooms = [r for r in self.data['rooms'] if r.get('room_type') in ['exam', 'classroom', 'lecture_hall']]
+                            if not available_rooms:
+                                available_rooms = self.data['rooms']  # Fallback to all rooms
+                            
+                            # Shuffle rooms to get variety
+                            random.shuffle(available_rooms)
+                            
+                            room_found = False
+                            for room in available_rooms:
+                                # Check if this room+date+time combination conflicts with global usage
+                                conflict_key = (room['room_id'], exam_date_str, hour, minute)
+                                
+                                # Check for conflicts with global exam usage
+                                room_conflict = False
+                                
+                                # Simple check: if exact same room, date, hour, minute already exists globally
+                                if conflict_key in global_exam_room_usage:
+                                    room_conflict = True
+                                else:
+                                    # Check for time overlap (2-hour slots) in global usage
+                                    for existing_key in global_exam_room_usage:
+                                        existing_room, existing_date, existing_hour, existing_minute = existing_key
+                                        if (existing_room == room['room_id'] and 
+                                            existing_date == exam_date_str):
+                                            
+                                            existing_start_minutes = existing_hour * 60 + existing_minute
+                                            existing_end_minutes = existing_start_minutes + 120
+                                            current_start_minutes = hour * 60 + minute
+                                            current_end_minutes = current_start_minutes + 120
+                                            
+                                            # Check overlap
+                                            if not (current_end_minutes <= existing_start_minutes or 
+                                                   current_start_minutes >= existing_end_minutes):
+                                                room_conflict = True
+                                                break
+                                
+                                if not room_conflict:
+                                    # Try to find an instructor who doesn't have conflicts
+                                    monitor_instructor = None
+                                    
+                                    # Shuffle the instructor list to get variety
+                                    potential_instructors = list(self.data['instructors'])
+                                    random.shuffle(potential_instructors)
+                                    
+                                    for potential_instructor in potential_instructors:
+                                        instructor_id = potential_instructor['instructor_id']
+                                        
+                                        # Check if this instructor has course classes at the same time
+                                        instructor_conflict = False
+                                        exam_weekday = exam_date.weekday() + 2  # Convert to 1-7 (Monday=2, Tuesday=3, etc.)
+                                        
+                                        for course_class in self.data['course_classes']:
+                                            if course_class['instructor_id'] == instructor_id:
+                                                # Check if course class is in the same semester and has overlapping time
+                                                cc_days = course_class.get('days', [])
+                                                if exam_weekday in cc_days:
+                                                    cc_start = course_class.get('start_period', 0)
+                                                    cc_end = course_class.get('end_period', 0)
+                                                    
+                                                    # Convert exam time to periods more accurately
+                                                    # Period 1 = 6:00-7:00, Period 2 = 7:00-8:00, etc.
+                                                    # So 7:30 AM = Period 2, 13:30 PM = Period 8
+                                                    if hour <= 6:
+                                                        exam_start_period = 1
+                                                    elif hour <= 12:
+                                                        exam_start_period = hour - 5  # 7:00 AM = Period 2
+                                                    else:
+                                                        exam_start_period = hour - 5  # 13:00 PM = Period 8
+                                                    
+                                                    exam_end_period = exam_start_period + 1  # 2-hour exam = 2 periods
+                                                    
+                                                    # Check for period overlap
+                                                    if not (exam_end_period <= cc_start or exam_start_period >= cc_end):
+                                                        instructor_conflict = True
+                                                        break
+                                        
+                                        if not instructor_conflict:
+                                            monitor_instructor = potential_instructor
+                                            break
+                                    
+                                    if monitor_instructor is None:
+                                        # Fallback: use any instructor if no conflict-free one found
+                                        # But prefer someone who's NOT the test instructor to avoid conflicts
+                                        test_instructor_id = self.data['fixed_accounts'].get('instructor', {}).get('instructor_id')
+                                        available_instructors = [
+                                            instr for instr in self.data['instructors']
+                                            if instr['instructor_id'] != test_instructor_id
+                                        ]
+                                        if available_instructors:
+                                            monitor_instructor = random.choice(available_instructors)
+                                        else:
+                                            monitor_instructor = random.choice(self.data['instructors'])
+                                    
+                                    # Found available slot, room, and instructor - now create exam
+                                    exam_class_id = self.generate_uuid()
+                                    
+                                    # Mark this slot and date+time combination as used
+                                    used_slots_for_date.add(slot_idx)
+                                    date_time_room_usage[date_time_key] = room['room_id']
+                                    global_exam_room_usage[conflict_key] = True
+                                    
+                                    exam_datetime = datetime.combine(exam_date, datetime.min.time().replace(hour=hour, minute=minute))
+                                    
+                                    exam_class_rows.append([
+                                        exam_class_id,
+                                        exam_id,
+                                        cc['course_class_id'],
+                                        room['room_id'],
+                                        monitor_instructor['instructor_id'],
+                                        exam_datetime,
+                                        slot_duration,
+                                        exam_status
+                                    ])
+                                    
+                                    self.data['exam_classes'].append({
+                                        'exam_class_id': exam_class_id,
+                                        'exam_id': exam_id,
+                                        'course_class_id': cc['course_class_id'],
+                                        'room_id': room['room_id'],
+                                        'start_time': exam_datetime
+                                    })
+                                    
+                                    exam_scheduled = True
+                                    room_found = True
+                                    time_str = f"{hour:02d}:{minute:02d}"
+                                    self.add_statement(f"-- TEST STUDENT: Exam scheduled for {course['subject_code']} on {exam_date} at {time_str} in {room.get('room_code', 'Room')} (status: {exam_status}) [Slot {slot_idx+1}]")
+                                    break
+                            
+                            if room_found:
+                                break
+                        
+                        if not exam_scheduled:
+                            # Fallback: force schedule with any available room and unused slot
+                            # Find any unused slot for this date
+                            unused_slot_idx = None
+                            for slot_idx in range(len(exam_slots)):
+                                if slot_idx not in used_slots_for_date:
+                                    unused_slot_idx = slot_idx
+                                    break
+                            
+                            if unused_slot_idx is not None:
+                                hour, minute, slot_duration = exam_slots[unused_slot_idx]
+                                
+                                # Try to find a room that doesn't conflict
+                                available_rooms = list(self.data['rooms'])
+                                random.shuffle(available_rooms)
+                                
+                                room = None
+                                for candidate_room in available_rooms:
+                                    fallback_key = (candidate_room['room_id'], exam_date_str, hour, minute)
+                                    if fallback_key not in global_exam_room_usage:
+                                        room = candidate_room
+                                        break
+                                
+                                # If no conflict-free room found, use any room
+                                if room is None:
+                                    room = random.choice(available_rooms)
+                                    fallback_key = (room['room_id'], exam_date_str, hour, minute)
+                                
+                                monitor_instructor = random.choice(self.data['instructors'])
+                                
+                                exam_class_id = self.generate_uuid()
+                                exam_datetime = datetime.combine(exam_date, datetime.min.time().replace(hour=hour, minute=minute))
+                                
+                                # Mark slot and date+time as used
+                                used_slots_for_date.add(unused_slot_idx)
+                                date_time_key = f"{exam_date_str}_{hour:02d}_{minute:02d}"
+                                date_time_room_usage[date_time_key] = room['room_id']
+                                global_exam_room_usage[fallback_key] = True
+                                
+                                exam_class_rows.append([
+                                    exam_class_id,
+                                    exam_id,
+                                    cc['course_class_id'],
+                                    room['room_id'],
+                                    monitor_instructor['instructor_id'],
+                                    exam_datetime,
+                                    slot_duration,
+                                    exam_status
+                                ])
+                                
+                                self.data['exam_classes'].append({
+                                    'exam_class_id': exam_class_id,
+                                    'exam_id': exam_id,
+                                    'course_class_id': cc['course_class_id'],
+                                    'room_id': room['room_id'],
+                                    'start_time': exam_datetime
+                                })
+                                
+                                time_str = f"{hour:02d}:{minute:02d}"
+                                self.add_statement(f"-- TEST STUDENT: Exam scheduled (fallback) for {course['subject_code']} on {exam_date} at {time_str} (status: {exam_status}) [Slot {unused_slot_idx+1}]")
+                            else:
+                                # All slots for this date are used - this shouldn't happen with proper logic
+                                self.add_statement(f"-- ERROR: Could not schedule exam for {course['subject_code']} on {exam_date} - all time slots used")
                         
                         course_idx += 1
-                        
-                        self.add_statement(f"-- TEST STUDENT: Exam scheduled for {course['subject_code']} on {exam_date} (status: {exam_status})")
                 
                 self.add_statement(f"-- TEST STUDENT: Created {course_idx} exam schedules for summer 2024-2025 courses")
+                self.add_statement(f"-- DISTRIBUTION: 2 past exams, 2 near future (next week), 2 far future (beyond 1 week)")
     
     self.add_statement(f"-- Total exams (course-level): {len(exam_rows)}")
     self.add_statement(f"-- Total exam entries (instructor submissions): {len(exam_entry_rows)}")

@@ -80,13 +80,34 @@ def create_student_health_insurance(self):
 
 def create_payments(self):
     """
-    REVISED: Create payments for 50% of enrollments (was 50%)
+    Create payments for enrollments
+    UPDATED: All enrollments except Fall 2025 (upcoming semester) must be paid
+    - Past and current completed semesters: 100% payment rate
+    - Fall 2025 (upcoming semester): 0% payment rate (not yet paid)
+    - Fee: 1000-3000 VND per credit (random)
     """
     self.add_statement("\n-- ==================== PAYMENTS ====================")
-    self.add_statement("-- Payment rate: 50% of enrollments")
+    self.add_statement("-- Fee per credit: 1000-3000 VND")
+    self.add_statement("-- UPDATED: All enrollments except Fall 2025 are paid")
     
     payment_enrollment_rows = []
     payment_detail_rows = []
+    payment_insurance_rows = []
+    
+    # Identify test students
+    test_student_ids = set()
+    for account_name, account_data in self.data.get('fixed_accounts', {}).items():
+        if account_name.startswith('student') and account_data.get('student_id'):
+            test_student_ids.add(account_data['student_id'])
+    
+    # Build semester lookup to identify Fall 2025
+    semester_lookup = {}
+    fall_2025_semester_ids = set()
+    for semester in self.data['semesters']:
+        semester_lookup[semester['semester_id']] = semester
+        # Fall 2025: start_year == 2025 and semester_type == 'fall'
+        if semester.get('start_year') == 2025 and semester.get('semester_type') == 'fall':
+            fall_2025_semester_ids.add(semester['semester_id'])
     
     # Group enrollments by student and semester
     enrollments_by_student_semester = defaultdict(list)
@@ -96,14 +117,27 @@ def create_payments(self):
     
     total_paid_enrollments = 0
     total_payments = 0
+    test_student_payment_count = 0
+    unpaid_fall_2025_enrollments = 0
     
+    # Process each student's enrollments
     for (student_id, semester_id), enrollments in enrollments_by_student_semester.items():
-        # CHANGED: 10% chance of payment (was 50%)
-        if random.random() > 0.50:
+        is_test_student = student_id in test_student_ids
+        
+        # Determine if this semester should have payment
+        # Pay for ALL semesters EXCEPT Fall 2025 (upcoming semester)
+        is_fall_2025 = semester_id in fall_2025_semester_ids
+        should_pay = not is_fall_2025
+        
+        if not should_pay:
+            # Count unpaid Fall 2025 enrollments
+            unpaid_fall_2025_enrollments += len(enrollments)
             continue
         
         payment_id = self.generate_uuid()
         total_payments += 1
+        if is_test_student:
+            test_student_payment_count += 1
         
         # Payment date: random within semester
         semester = next((s for s in self.data['semesters'] if s['semester_id'] == semester_id), None)
@@ -134,13 +168,15 @@ def create_payments(self):
         for enrollment in enrollments:
             payment_detail_id = self.generate_uuid()
             
-            # Calculate amount
+            # Calculate amount: 1000-3000 VND per credit
             course = next((c for c in self.data['courses'] 
                           if c['course_id'] == enrollment['course_id']), None)
             if course:
-                amount = course['credits'] * 600000  # fee_per_credit
+                fee_per_credit = random.randint(1000, 3000)
+                amount = course['credits'] * fee_per_credit
             else:
-                amount = 3 * 600000  # default
+                # Default: 3 credits at random fee
+                amount = 3 * random.randint(1000, 3000)
             
             payment_detail_rows.append([
                 payment_detail_id,
@@ -152,8 +188,11 @@ def create_payments(self):
             total_paid_enrollments += 1
     
     self.add_statement(f"-- Total payments: {total_payments}")
+    self.add_statement(f"-- Test student payments: {test_student_payment_count}")
     self.add_statement(f"-- Total paid enrollments: {total_paid_enrollments}")
-    self.add_statement(f"-- Payment rate: {(total_paid_enrollments / len(self.data['enrollments']) * 100):.1f}%")
+    self.add_statement(f"-- Unpaid Fall 2025 enrollments: {unpaid_fall_2025_enrollments}")
+    self.add_statement(f"-- Payment coverage: {(total_paid_enrollments / len(self.data['enrollments']) * 100):.1f}% of all enrollments")
+    self.add_statement(f"-- Payment policy: All enrollments EXCEPT Fall 2025 (upcoming semester) are paid")
     
     self.bulk_insert('payment_enrollment',
                     ['payment_id', 'student_id', 'semester_id', 'payment_date',
@@ -164,6 +203,46 @@ def create_payments(self):
         self.bulk_insert('payment_enrollment_detail',
                         ['payment_enrollment_detail_ID', 'payment_id', 'enrollment_id', 'amount_paid'],
                         payment_detail_rows)
+    
+    # Generate payment_insurance for past insurances
+    for insurance in self.data.get('insurances', []):
+        if not insurance.get('should_have_payment'):
+            continue
+        
+        is_test_student = insurance['student_id'] in test_student_ids
+        
+        # Test students: 50% paid (deterministic), Regular: 80% chance
+        should_pay_insurance = False
+        if is_test_student:
+            should_pay_insurance = (hash(insurance['insurance_id']) % 2 == 0)
+        else:
+            should_pay_insurance = (random.random() <= 0.80)
+        
+        if not should_pay_insurance:
+            continue
+        
+        payment_id = self.generate_uuid()
+        
+        # Payment date: random within first 3 months of insurance period
+        insurance_start = insurance['start_date']
+        if isinstance(insurance_start, str):
+            insurance_start = datetime.strptime(insurance_start, '%Y-%m-%d').date()
+        
+        payment_date = insurance_start + timedelta(days=random.randint(0, 90))
+        
+        payment_insurance_rows.append([
+            payment_id,
+            insurance['insurance_id'],
+            payment_date,
+            'completed',
+            'Health insurance payment'
+        ])
+    
+    if payment_insurance_rows:
+        self.add_statement(f"-- Total insurance payments: {len(payment_insurance_rows)}")
+        self.bulk_insert('payment_insurance',
+                        ['payment_id', 'insurance_id', 'payment_date', 'payment_status', 'notes'],
+                        payment_insurance_rows)
 
 from modules.base_generator import SQLDataGenerator
 SQLDataGenerator.create_student_health_insurance = create_student_health_insurance

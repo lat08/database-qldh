@@ -2,6 +2,38 @@ import random
 from collections import defaultdict
 from .config import *
 
+def generate_random_grade_note():
+    """Generate a random short grade note for instructors"""
+    notes = [
+        "Kết quả tốt",
+        "Cần cải thiện",
+        "Xuất sắc",
+        "Đi học đều đặn",
+        "Nộp bài muộn",
+        "Tham gia tích cực",
+        "Tiến bộ đều đặn",
+        "Có tiềm năng",
+        "Hiểu bài tốt",
+        "Cần cố gắng hơn",
+        "Chuẩn bị bài kỹ",
+        "Kết quả thi tốt",
+        "Có tiến bộ theo thời gian",
+        "Nền tảng vững chắc",
+        "Sáng tạo trong giải quyết",
+        "Tinh thần hợp tác tốt",
+        "Kỹ năng kỹ thuật tốt",
+        "Cần cải thiện giao tiếp",
+        "Khả năng giải quyết vấn đề tốt",
+        "Đạt yêu cầu",
+        "Thái độ học tập tốt",
+        "Cần chú ý hơn trong lớp",
+        "Hoàn thành đầy đủ bài tập",
+        "Có ý thức tự học",
+        "Tương tác tốt với bạn bè",
+        None, None, None  # 30% chance of no note
+    ]
+    return random.choice(notes)
+
 def create_student_enrollments(self):
     """
     FIXED: Better enrollment distribution
@@ -9,8 +41,9 @@ def create_student_enrollments(self):
     - Students enroll in available seats randomly
     - Better tracking of enrolled_count
     """
-    self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (FIXED) ====================")
+    self.add_statement("\n-- ==================== STUDENT COURSE ENROLLMENTS (UPDATED) ====================")
     self.add_statement("-- More balanced enrollment distribution")
+    self.add_statement("-- UPDATED: Students can enroll in curriculum + elective courses")
     self.add_statement("-- Enrollment cutoff: Fall 2025")
     
     enrollment_rows = []
@@ -89,6 +122,7 @@ def create_student_enrollments(self):
         student_has_enrolled = False
         
         # Get all eligible courses for this student
+        # UPDATED: More inclusive eligibility - curriculum + electives
         # Eligible courses include:
         # - Past semesters (start_year < 2025) - all types (fall, spring, summer)
         # - Spring 2024-2025 (start_year == 2024, semester_type == 'spring') - past/completed
@@ -99,8 +133,7 @@ def create_student_enrollments(self):
         # - Spring/Summer 2025 (start_year == 2025, semester_type in ('spring', 'summer')) - future
         eligible_courses = []
         for course in self.data['courses']:
-            if course['subject_id'] not in curriculum_subject_ids:
-                continue
+            # Check semester eligibility first
             if course['start_year'] < student_start_year:
                 continue
             if course['start_year'] > 2025:
@@ -108,8 +141,17 @@ def create_student_enrollments(self):
             # Exclude Spring/Summer 2025 (future semesters)
             if course['start_year'] == 2025 and course['semester_type'] in ('spring', 'summer'):
                 continue
-            # Include all other courses (past and current semesters)
-            eligible_courses.append(course)
+            
+            # UPDATED: Include both curriculum and elective courses
+            is_curriculum_course = course['subject_id'] in curriculum_subject_ids
+            is_elective_course = course['subject_id'] not in curriculum_subject_ids
+            
+            if is_curriculum_course:
+                # Always include curriculum courses
+                eligible_courses.append(course)
+            elif is_elective_course and random.random() < 0.2:
+                # 20% chance to include elective courses for variety
+                eligible_courses.append(course)
         
         # FIXED: Prioritize summer 2024-2025 and current semester courses
         # Separate summer 2024-2025 and fall 2025 courses from others
@@ -128,9 +170,13 @@ def create_student_enrollments(self):
         # Prioritize: summer 2024-2025 > fall 2025 > others
         prioritized_courses = summer_2024_2025_courses + fall_2025_courses + other_courses
         
-        # SPECIAL HANDLING FOR TEST STUDENT: Enroll in more past courses
-        test_student_id = self.data['fixed_accounts'].get('student', {}).get('student_id')
-        is_test_student = student['student_id'] == test_student_id if test_student_id else False
+        # SPECIAL HANDLING FOR TEST STUDENTS: Enroll in more past courses
+        # Check if this is any test student
+        is_test_student = False
+        for account_name, account_data in self.data.get('fixed_accounts', {}).items():
+            if account_name.startswith('student') and account_data.get('student_id') == student['student_id']:
+                is_test_student = True
+                break
         
         # FIXED: Enroll in ~70% of eligible courses, but ensure summer 2024-2025 courses are prioritized
         # For test student, enroll in ~90% of eligible courses to ensure more past enrollments
@@ -158,6 +204,10 @@ def create_student_enrollments(self):
         courses_to_enroll = prioritized_courses[:num_to_enroll] if not is_senior else prioritized_courses
         
         for course in courses_to_enroll:
+            # FIXED: Prevent enrolling in multiple courses of the same subject
+            if course['subject_id'] in enrolled_subjects_for_student:
+                continue  # Skip if already enrolled in this subject
+                
             key = (course['course_id'], course['semester_id'])
             available_classes = course_classes_by_course_semester.get(key, [])
             if not available_classes:
@@ -264,6 +314,10 @@ def create_student_enrollments(self):
                 students_with_full_curriculum += 1
             
             for subject_id in missing_subjects:
+                # FIXED: Double-check that subject is still missing (not enrolled during normal enrollment)
+                if subject_id in enrolled_subjects_for_student:
+                    continue  # Skip if already enrolled through normal process
+                    
                 available_courses = courses_by_subject.get(subject_id, [])
                 if not available_courses:
                     continue
@@ -333,9 +387,14 @@ def create_student_enrollments(self):
             if not (curriculum_subject_ids - enrolled_subjects_for_student):
                 students_with_full_curriculum += 1
 
-    # SPECIAL HANDLING FOR TEST STUDENT: Enroll in exactly 6 courses in summer 2024-2025
-    test_student_id = self.data['fixed_accounts'].get('student', {}).get('student_id')
-    if test_student_id:
+    # SPECIAL HANDLING FOR ALL TEST STUDENTS: Enroll in exactly 6 courses in summer 2024-2025
+    # Process each test student
+    for account_name, account_data in self.data.get('fixed_accounts', {}).items():
+        if not account_name.startswith('student'):
+            continue
+        test_student_id = account_data.get('student_id')
+        if not test_student_id:
+            continue
         test_student = next((s for s in self.data['students'] if s['student_id'] == test_student_id), None)
         if test_student:
             # Find summer 2024-2025 semester
@@ -382,24 +441,38 @@ def create_student_enrollments(self):
                     ]
                     test_student_summer_course_ids = {e['course_id'] for e in test_student_summer_enrollments}
                     
-                    # Target: 6 courses total in summer
+                    # FIXED: Track all subjects the test student is already enrolled in (across all semesters)
+                    test_student_enrolled_subjects = set()
+                    for e in self.data['enrollments']:
+                        if e['student_id'] == test_student_id:
+                            course_for_enrollment = next((c for c in self.data['courses'] if c['course_id'] == e['course_id']), None)
+                            if course_for_enrollment:
+                                test_student_enrolled_subjects.add(course_for_enrollment['subject_id'])
+                    
+                    # Target: EXACTLY 6 courses total in summer (force enrollment if needed)
                     target_count = 6
                     current_count = len(test_student_summer_enrollments)
                     needed_count = max(0, target_count - current_count)
                     
                     if needed_count > 0:
-                        # Enroll in curriculum courses first (at least 3-4), then non-curriculum
-                        courses_to_enroll = []
-                        curriculum_needed = min(needed_count, max(3, len(curriculum_courses)))
-                        non_curriculum_needed = needed_count - curriculum_needed
+                        self.add_statement(f"-- TEST STUDENT: Current summer enrollments: {current_count}, need {needed_count} more to reach target of {target_count}")
                         
-                        # Select curriculum courses not already enrolled
-                        available_curriculum = [c for c in curriculum_courses if c['course_id'] not in test_student_summer_course_ids]
-                        courses_to_enroll.extend(available_curriculum[:curriculum_needed])
+                        # Enroll in any available courses (curriculum or non-curriculum)
+                        # FIXED: Also exclude courses where subject is already enrolled
+                        available_courses = [c for c in summer_courses 
+                                           if c['course_id'] not in test_student_summer_course_ids
+                                           and c['subject_id'] not in test_student_enrolled_subjects]
                         
-                        # Select non-curriculum courses to make up to 6
-                        available_non_curriculum = [c for c in non_curriculum_courses if c['course_id'] not in test_student_summer_course_ids]
-                        courses_to_enroll.extend(available_non_curriculum[:non_curriculum_needed])
+                        # Prioritize curriculum courses first, then any other courses
+                        curriculum_available = [c for c in available_courses if c['subject_id'] in curriculum_subject_ids]
+                        non_curriculum_available = [c for c in available_courses if c['subject_id'] not in curriculum_subject_ids]
+                        
+                        courses_to_enroll = curriculum_available[:needed_count]
+                        if len(courses_to_enroll) < needed_count:
+                            remaining_needed = needed_count - len(courses_to_enroll)
+                            courses_to_enroll.extend(non_curriculum_available[:remaining_needed])
+                        
+                        self.add_statement(f"-- TEST STUDENT: Found {len(courses_to_enroll)} courses to enroll in summer 2024-2025")
                         
                         # Enroll test student in these courses
                         for course in courses_to_enroll:
@@ -408,18 +481,45 @@ def create_student_enrollments(self):
                             if not available_classes:
                                 continue
                             
-                            # Find available course class (prefer one with space, but can force if needed)
+                            # Find available course class that doesn't conflict with existing schedule
                             assigned_course_class = None
                             for cc in available_classes:
                                 enrollment_key = (test_student_id, cc['course_class_id'])
                                 if enrollment_key in enrolled_combinations:
                                     continue
                                 
-                                # For test student, allow enrollment even if class is full (force enrollment)
-                                assigned_course_class = cc
-                                if cc['enrolled_count'] < cc['max_students']:
-                                    cc['enrolled_count'] += 1
-                                break
+                                # Check for schedule conflicts with existing test student enrollments
+                                has_conflict = False
+                                test_student_summer_existing = [
+                                    e for e in self.data['enrollments']
+                                    if e['student_id'] == test_student_id and e['semester_id'] == course['semester_id']
+                                ]
+                                
+                                for existing_enrollment in test_student_summer_existing:
+                                    existing_cc = next((c for c in self.data['course_classes']
+                                                      if c['course_class_id'] == existing_enrollment['course_class_id']), None)
+                                    if not existing_cc:
+                                        continue
+                                    
+                                    # Check if days and periods overlap
+                                    cc_days = cc.get('days', [])
+                                    existing_days = existing_cc.get('days', [])
+                                    for day in cc_days:
+                                        if day in existing_days:
+                                            # Same day - check if periods overlap (STRICT: any overlap is a conflict)
+                                            if not (cc['end_period'] <= existing_cc['start_period'] or
+                                                   cc['start_period'] >= existing_cc['end_period']):
+                                                has_conflict = True
+                                                break
+                                    if has_conflict:
+                                        break
+                                
+                                if not has_conflict:
+                                    # For test student, allow enrollment even if class is full (force enrollment)
+                                    assigned_course_class = cc
+                                    if cc['enrolled_count'] < cc['max_students']:
+                                        cc['enrolled_count'] += 1
+                                    break
                             
                             if assigned_course_class:
                                 enrollment_key = (test_student_id, assigned_course_class['course_class_id'])
@@ -449,6 +549,8 @@ def create_student_enrollments(self):
                                 
                                 stats['total_enrollments'] += 1
                                 self.add_statement(f"-- TEST STUDENT: Enrolled in {course['subject_code']} for summer 2024-2025")
+                            else:
+                                self.add_statement(f"-- WARNING: Could not enroll test student in {course['subject_code']} - schedule conflict with existing courses")
                         
                         # Verify final count
                         final_summer_enrollments = [
@@ -573,6 +675,17 @@ def create_student_enrollments(self):
                 enrollment_key = (student['student_id'], cc['course_class_id'])
                 if enrollment_key in enrolled_combinations:
                     continue
+                
+                # FIXED: Check if student is already enrolled in same subject
+                student_enrolled_subjects = set()
+                for e in self.data['enrollments']:
+                    if e['student_id'] == student['student_id']:
+                        course_for_enrollment = next((c for c in self.data['courses'] if c['course_id'] == e['course_id']), None)
+                        if course_for_enrollment:
+                            student_enrolled_subjects.add(course_for_enrollment['subject_id'])
+                
+                if course['subject_id'] in student_enrolled_subjects:
+                    continue  # Skip if student already enrolled in this subject
                 
                 # Check for actual schedule conflicts (same day, overlapping time)
                 # STRICT: No overlaps allowed - students cannot be in two places at once
@@ -718,6 +831,7 @@ def create_student_enrollments(self):
 
     # PHASE 2: CREATE DRAFT GRADES
     self.add_statement(f"\n-- Creating draft grades for current semester courses...")
+    self.add_statement(f"-- FIXED: ALL summer 2024-2025 enrollments get attendance and midterm grades")
     
     for enrollment in self.data['enrollments']:
         course_class_id = enrollment['course_class_id']
@@ -741,22 +855,41 @@ def create_student_enrollments(self):
             final_draft = None
             
             if grade_status == 'pending':
-                rand = random.random()
-                if rand < 0.85:
+                # FIXED: For summer 2024-2025, ensure ALL enrollments get attendance and midterm grades
+                is_summer_2024_2025 = (cc['start_year'] == 2024 and cc['semester_type'] == 'summer')
+                
+                if is_summer_2024_2025:
+                    # FOR SUMMER 2024-2025: ALL students get attendance and midterm grades
                     attendance_draft = round(random.uniform(att_min, att_max), 2)
                     midterm_draft = round(random.uniform(mid_min, mid_max), 2)
                     final_draft = None
                 else:
-                    attendance_draft = round(random.uniform(att_min, att_max), 2)
-                    midterm_draft = None
-                    final_draft = None
+                    # For other semesters, use random distribution
+                    rand = random.random()
+                    if rand < 0.85:
+                        attendance_draft = round(random.uniform(att_min, att_max), 2)
+                        midterm_draft = round(random.uniform(mid_min, mid_max), 2)
+                        final_draft = None
+                    else:
+                        attendance_draft = round(random.uniform(att_min, att_max), 2)
+                        midterm_draft = None
+                        final_draft = None
             
             elif grade_status == 'draft':
+                # FIXED: For summer 2024-2025, ensure ALL enrollments get attendance and midterm grades
+                is_summer_2024_2025 = (cc['start_year'] == 2024 and cc['semester_type'] == 'summer')
+                
                 if is_fixed:
                     attendance_draft = round(random.uniform(7.5, 9.5), 2)
                     midterm_draft = round(random.uniform(6.5, 9.0), 2)
                     final_draft = None
+                elif is_summer_2024_2025:
+                    # FOR SUMMER 2024-2025: ALL students get attendance and midterm grades
+                    attendance_draft = round(random.uniform(att_min, att_max), 2)
+                    midterm_draft = round(random.uniform(mid_min, mid_max), 2)
+                    final_draft = None
                 else:
+                    # For other semesters, use random distribution
                     rand = random.random()
                     if rand < 0.40:
                         attendance_draft = round(random.uniform(att_min, att_max), 2)
@@ -768,12 +901,14 @@ def create_student_enrollments(self):
                         final_draft = None
             
             if attendance_draft is not None or midterm_draft is not None or final_draft is not None:
+                grade_note = generate_random_grade_note()
                 draft_grade_rows.append([
                     draft_grade_id,
                     enrollment['enrollment_id'],
                     attendance_draft,
                     midterm_draft,
                     final_draft,
+                    grade_note,
                     None
                 ])
                 stats['with_draft_grades'] += 1
@@ -868,7 +1003,8 @@ def create_student_enrollments(self):
                 enrollment['enrollment_id'],
                 attendance,
                 midterm,
-                final
+                final,
+                generate_random_grade_note()
             ])
             
             if attendance is not None or midterm is not None or final is not None:
@@ -892,6 +1028,7 @@ def create_student_enrollments(self):
     self.add_statement(f"--   - Spring 2024-2025 (start_year == 2024, semester_type == 'spring'): past/completed")
     self.add_statement(f"--   - Summer 2024-2025 (start_year == 2024, semester_type == 'summer'): current/ongoing")
     self.add_statement(f"--   - Fall 2025 (start_year == 2025, semester_type == 'fall'): current registration period")
+    self.add_statement(f"-- UPDATED: Students enroll in curriculum courses (100%) + elective courses (20%)")
     self.add_statement(f"-- Excludes: Spring/Summer 2025 (future semesters)")
     
     # Insert data
@@ -903,7 +1040,7 @@ def create_student_enrollments(self):
     if draft_grade_rows:
         self.bulk_insert('enrollment_draft_grade',
                         ['draft_grade_id', 'enrollment_id', 'attendance_grade_draft',
-                         'midterm_grade_draft', 'final_grade_draft', 'updated_at'],
+                         'midterm_grade_draft', 'final_grade_draft', 'grade_note', 'updated_at'],
                         draft_grade_rows)
     
     if grade_version_rows:
@@ -916,7 +1053,7 @@ def create_student_enrollments(self):
     if grade_detail_rows:
         self.bulk_insert('enrollment_grade_detail',
                         ['grade_detail_id', 'grade_version_id', 'enrollment_id',
-                         'attendance_grade', 'midterm_grade', 'final_grade'],
+                         'attendance_grade', 'midterm_grade', 'final_grade', 'grade_note'],
                         grade_detail_rows)
 
 from modules.base_generator import SQLDataGenerator

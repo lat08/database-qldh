@@ -123,7 +123,9 @@ class SQLDataGenerator:
             return 'NULL'
         elif isinstance(value, str):
             return f"N'{value.replace("'", "''")}'"
-        elif isinstance(value, (date, datetime)):
+        elif isinstance(value, datetime):
+            return f"'{value.strftime('%Y-%m-%d %H:%M:%S')}'"
+        elif isinstance(value, date):
             return f"'{value.strftime('%Y-%m-%d')}'"
         elif isinstance(value, bool):
             return '1' if value else '0'
@@ -155,6 +157,215 @@ class SQLDataGenerator:
     def create_password_hash(self, password, salt_bytes):
         h = hmac.new(salt_bytes, password.encode('utf-8'), hashlib.sha512)
         return base64.b64encode(h.digest()).decode('utf-8')
+
+    def cleanup_empty_course_classes(self):
+        """
+        Remove course classes with 0 enrollments, except for Fall 2025 (upcoming semester)
+        This prevents constraint violations and improves data quality
+        """
+        self.add_statement("\n-- ==================== CLEANUP: EMPTY COURSE CLASSES ====================")
+        self.add_statement("-- Delete course classes with 0 enrollments")
+        self.add_statement("-- PRESERVE: Fall 2025 (HK1 2025-2026) - upcoming semester for registration")
+        self.add_statement("-- This cleanup prevents unnecessary empty course classes while maintaining")
+        self.add_statement("-- courses available for student registration in the upcoming semester")
+        self.add_statement("-- FIXED: Includes exam_entry deletion to prevent constraint violations")
+        
+        cleanup_sql = """
+-- Count course classes with 0 enrollments before cleanup
+PRINT 'BEFORE CLEANUP:';
+SELECT 
+    'Total Course Classes' as category,
+    COUNT(*) as count
+FROM course_class cc
+WHERE cc.is_deleted = 0 AND cc.is_active = 1;
+
+SELECT 
+    'Course Classes with 0 Enrollments' as category,
+    COUNT(*) as count
+FROM course_class cc
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+-- Identify Fall 2025 semester (HK1 2025-2026)
+DECLARE @Fall2025SemesterId UNIQUEIDENTIFIER;
+SELECT @Fall2025SemesterId = s.semester_id
+FROM semester s
+INNER JOIN academic_year ay ON s.academic_year_id = ay.academic_year_id
+WHERE s.semester_type = 'fall' 
+  AND ay.year_name = '2025-2026';  -- Fall 2025 is in academic year 2025-2026
+
+-- Delete course classes with 0 enrollments, EXCEPT Fall 2025
+-- Step 1: Delete dependent records first to avoid constraint violations
+
+-- Delete enrollment_grade_detail records for empty course classes (except Fall 2025)
+DELETE egd
+FROM enrollment_grade_detail egd
+INNER JOIN enrollment_grade_version egv ON egd.grade_version_id = egv.grade_version_id
+INNER JOIN course_class cc ON egv.course_class_id = cc.course_class_id
+INNER JOIN course c ON cc.course_id = c.course_id
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND c.semester_id != @Fall2025SemesterId  -- PRESERVE Fall 2025
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+-- Delete enrollment_grade_version records for empty course classes (except Fall 2025)
+DELETE egv
+FROM enrollment_grade_version egv
+INNER JOIN course_class cc ON egv.course_class_id = cc.course_class_id
+INNER JOIN course c ON cc.course_id = c.course_id
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND c.semester_id != @Fall2025SemesterId  -- PRESERVE Fall 2025
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+-- Delete exam_entry records for empty course classes (except Fall 2025)
+DELETE ee
+FROM exam_entry ee
+INNER JOIN course_class cc ON ee.course_class_id = cc.course_class_id
+INNER JOIN course c ON cc.course_id = c.course_id
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND c.semester_id != @Fall2025SemesterId  -- PRESERVE Fall 2025
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+-- Delete exam_class records for empty course classes (except Fall 2025)
+DELETE ec
+FROM exam_class ec
+INNER JOIN course_class cc ON ec.course_class_id = cc.course_class_id
+INNER JOIN course c ON cc.course_id = c.course_id
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND c.semester_id != @Fall2025SemesterId  -- PRESERVE Fall 2025
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+-- Delete schedule_change records for empty course classes (except Fall 2025)
+DELETE sc
+FROM schedule_change sc
+INNER JOIN course_class cc ON sc.course_class_id = cc.course_class_id
+INNER JOIN course c ON cc.course_id = c.course_id
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND c.semester_id != @Fall2025SemesterId  -- PRESERVE Fall 2025
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+-- Delete change_schedule_request records for empty course classes (except Fall 2025)
+DELETE csr
+FROM change_schedule_request csr
+INNER JOIN course_class cc ON csr.course_class_id = cc.course_class_id
+INNER JOIN course c ON cc.course_id = c.course_id
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND c.semester_id != @Fall2025SemesterId  -- PRESERVE Fall 2025
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+-- Step 2: Finally, delete the empty course classes themselves (except Fall 2025)
+DECLARE @DeletedCount INT;
+
+DELETE cc
+FROM course_class cc
+INNER JOIN course c ON cc.course_id = c.course_id
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND c.semester_id != @Fall2025SemesterId  -- PRESERVE Fall 2025
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+SET @DeletedCount = @@ROWCOUNT;
+
+-- Count remaining course classes after cleanup
+PRINT '';
+PRINT 'AFTER CLEANUP:';
+SELECT 
+    'Total Course Classes' as category,
+    COUNT(*) as count
+FROM course_class cc
+WHERE cc.is_deleted = 0 AND cc.is_active = 1;
+
+SELECT 
+    'Course Classes with 0 Enrollments' as category,
+    COUNT(*) as count
+FROM course_class cc
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM student_enrollment se
+      WHERE se.course_class_id = cc.course_class_id
+        AND se.is_deleted = 0
+        AND se.is_active = 1
+        AND se.enrollment_status IN ('registered', 'completed')
+  );
+
+SELECT 
+    'Fall 2025 Course Classes (Preserved)' as category,
+    COUNT(*) as count
+FROM course_class cc
+INNER JOIN course c ON cc.course_id = c.course_id
+WHERE cc.is_deleted = 0 
+  AND cc.is_active = 1
+  AND c.semester_id = @Fall2025SemesterId;
+
+PRINT 'CLEANUP SUMMARY:';
+PRINT 'Deleted ' + CAST(@DeletedCount AS NVARCHAR(10)) + ' empty course classes (excluding Fall 2025)';
+PRINT 'Fall 2025 course classes preserved for upcoming registration';"""
+
+        self.add_statement(cleanup_sql)
 
     def generate_all(self):
         """
@@ -278,11 +489,40 @@ class SQLDataGenerator:
         
         self.create_regulations()
 
-        self.add_statement("-- =========================================================================\n\n")
+        self.add_statement("\n\n-- =========================================================================\n\n")
 
         self.add_statement(generate_theme_insert_from_file(r'database-qldh\theme_configurations.txt'))
 
         self.add_statement("\n\n-- =========================================================================\n\n")
+        
+        # =========================================================================
+        # PHASE 11: CHATBOT KNOWLEDGE BASE
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 11: CHATBOT KNOWLEDGE BASE")
+        self.add_statement("-- =========================================================================")
+        
+        # Read and append ChatBot.sql content
+        chatbot_sql_path = r'database-qldh\sql\ChatBot.sql'
+        try:
+            with open(chatbot_sql_path, 'r', encoding='utf-8-sig') as f:
+                chatbot_content = f.read().strip()
+                self.add_statement(chatbot_content)
+        except FileNotFoundError:
+            self.add_statement(f"-- Warning: ChatBot.sql file not found at {chatbot_sql_path}")
+        except Exception as e:
+            self.add_statement(f"-- Error reading ChatBot.sql: {str(e)}")
+        
+        self.add_statement("\n-- =========================================================================")
+        
+        # =========================================================================
+        # PHASE 12: DATA CLEANUP - REMOVE EMPTY COURSE CLASSES
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 12: DATA CLEANUP - REMOVE EMPTY COURSE CLASSES")
+        self.add_statement("-- =========================================================================")
+        
+        self.cleanup_empty_course_classes()
         
         # =========================================================================
         # FINAL STATISTICS
@@ -302,6 +542,7 @@ class SQLDataGenerator:
     def save_to_file(self):
         """
         Save generated SQL statements to output file
+        Appends ChatBot.sql at the end
         """
         output_file = OUTPUT_FILE
         

@@ -358,20 +358,48 @@ def create_students(self):
                 return status
         return 'active'  # Fallback
     
-    # Fixed student
-    student_config = self.spec_data.get('test_student_config', {})
-    target_class_year = int(student_config.get('class_year', 2023))
-    target_class = next((c for c in self.data['classes'] if c['start_year'] == target_class_year), None)
+    # Handle ALL test students from spec file
+    # Collect all test students first, then distribute them across different classes
+    test_students_to_assign = []
+    for config_key in self.spec_data.keys():
+        if config_key.startswith('test_student') and config_key.endswith('_config'):
+            student_config = self.spec_data.get(config_key, {})
+            account_name = config_key.replace('_config', '').replace('test_', '')
+            
+            if account_name not in self.data.get('fixed_accounts', {}):
+                continue
+            
+            target_class_year = int(student_config.get('class_year', 2023))
+            test_students_to_assign.append({
+                'account_name': account_name,
+                'student_config': student_config,
+                'target_class_year': target_class_year
+            })
     
-    if target_class:
+    # Get all classes for the target year and distribute test students across them
+    for idx, test_student_info in enumerate(test_students_to_assign):
+        account_name = test_student_info['account_name']
+        student_config = test_student_info['student_config']
+        target_class_year = test_student_info['target_class_year']
+        
+        # Get all classes for this year
+        available_classes = [c for c in self.data['classes'] if c['start_year'] == target_class_year]
+        
+        if not available_classes:
+            self.add_statement(f"-- WARNING: Could not find any class for year {target_class_year}, skipping {account_name}")
+            continue
+        
+        # Distribute test students across different classes (round-robin)
+        target_class = available_classes[idx % len(available_classes)]
+        
         student_id = student_config.get('student_id')
-        person_id = self.data['fixed_accounts']['student']['person_id']
+        person_id = self.data['fixed_accounts'][account_name]['person_id']
         student_code = student_config.get('student_code')
         
-        self.data['fixed_accounts']['student']['class_id'] = target_class['class_id']
-        self.data['fixed_accounts']['student']['class_start_year'] = target_class_year
+        self.data['fixed_accounts'][account_name]['class_id'] = target_class['class_id']
+        self.data['fixed_accounts'][account_name]['class_start_year'] = target_class_year
         
-        # Fixed student always has 'active' status
+        # Fixed students always have 'active' status
         student_rows.append([student_id, person_id, student_code, target_class['class_id'], 'active'])
         
         self.data['students'].append({
@@ -384,9 +412,7 @@ def create_students(self):
             'is_fixed': True
         })
         
-        self.add_statement(f"-- Fixed STUDENT assigned to: {target_class['class_name']} (year {target_class_year})")
-    else:
-        self.add_statement(f"-- WARNING: Could not find class for year {target_class_year}, skipping fixed student")
+        self.add_statement(f"-- Fixed STUDENT ({account_name}) assigned to: {target_class['class_name']} ({target_class.get('department_name', 'unknown dept')}) (year {target_class_year})")
     
     # Track status distribution for logging
     status_counts = {status: 0 for status, _ in enrollment_statuses}
@@ -437,9 +463,12 @@ def create_students(self):
             
             global_counter += 1
     
+    # Count fixed students
+    num_fixed = len([s for s in self.data['students'] if s.get('is_fixed')])
+    
     # Log statistics
     self.add_statement(f"-- Total students: {len(student_rows)}")
-    self.add_statement(f"-- Fixed: 1, Regular: {len(student_rows) - 1}")
+    self.add_statement(f"-- Fixed: {num_fixed}, Regular: {len(student_rows) - num_fixed}")
     self.add_statement("-- Enrollment status distribution:")
     for status, count in status_counts.items():
         percentage = (count / (len(student_rows) - 1) * 100) if len(student_rows) > 1 else 0

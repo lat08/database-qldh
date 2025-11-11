@@ -657,6 +657,9 @@ CREATE TABLE enrollment_draft_grade (
     midterm_grade_draft NUMERIC(4,2) CHECK (midterm_grade_draft BETWEEN 0 AND 10),
     final_grade_draft NUMERIC(4,2) CHECK (final_grade_draft BETWEEN 0 AND 10),
     
+    -- Grade note for instructor comments
+    grade_note NVARCHAR(500) NULL,
+    
     updated_at DATETIME2 NULL,
     
     CONSTRAINT FK_enrollment_draft_grade_enrollment FOREIGN KEY (enrollment_id)
@@ -712,6 +715,9 @@ CREATE TABLE enrollment_grade_detail (
     attendance_grade NUMERIC(4,2) CHECK (attendance_grade BETWEEN 0 AND 10),
     midterm_grade NUMERIC(4,2) CHECK (midterm_grade BETWEEN 0 AND 10),
     final_grade NUMERIC(4,2) CHECK (final_grade BETWEEN 0 AND 10),
+    
+    -- Grade note for instructor comments
+    grade_note NVARCHAR(500) NULL,
     
     CONSTRAINT FK_enrollment_grade_detail_version FOREIGN KEY (grade_version_id)
         REFERENCES enrollment_grade_version(grade_version_id) ON DELETE CASCADE,
@@ -804,7 +810,7 @@ CREATE TABLE notification_schedule (
     scheduled_date DATETIME2 NOT NULL,
     visible_from DATETIME2 NOT NULL,
     is_read BIT NOT NULL DEFAULT 0,
-    target_type NVARCHAR(50) NOT NULL CHECK (target_type IN ('all', 'all_students', 'all_instructors', 'class', 'faculty', 'instructor')),
+    target_type NVARCHAR(50) NOT NULL CHECK (target_type IN ('all', 'all_students', 'all_instructors', 'class', 'faculty', 'instructor', 'student')),
     target_id UNIQUEIDENTIFIER NULL,
     created_by_user UNIQUEIDENTIFIER NOT NULL,
     status NVARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'cancelled')),
@@ -1241,3 +1247,59 @@ CREATE INDEX idx_theme_history_config ON theme_history(theme_config_id);
 CREATE INDEX idx_theme_history_admin ON theme_history(changed_by_admin_id);
 CREATE INDEX idx_theme_history_action ON theme_history(action);
 CREATE INDEX idx_theme_history_created ON theme_history(created_at);
+
+CREATE TABLE change_schedule_request (
+    schedule_change_request_id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    course_class_id UNIQUEIDENTIFIER NOT NULL,
+    cancelled_week INT NOT NULL,
+    makeup_week INT NULL,
+    makeup_date DATE NULL,
+    makeup_room_id UNIQUEIDENTIFIER NULL,
+    day_of_week INT NOT NULL,
+    start_period INT NOT NULL,
+    end_period INT NOT NULL,
+    reason NVARCHAR(500) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending|approved|rejected
+    created_at DATETIME NOT NULL DEFAULT GETDATE(),
+    created_by UNIQUEIDENTIFIER NULL,
+    reviewed_at DATETIME NULL,
+    reviewed_by UNIQUEIDENTIFIER NULL,
+    review_note NVARCHAR(500) NULL,
+    is_active BIT NOT NULL DEFAULT 1,
+    is_deleted BIT NOT NULL DEFAULT 0
+);
+
+ALTER TABLE change_schedule_request
+ADD CONSTRAINT FK_change_schedule_request_course_class
+FOREIGN KEY (course_class_id) REFERENCES course_class(course_class_id);
+
+ALTER TABLE change_schedule_request
+ADD CONSTRAINT FK_change_schedule_request_room
+FOREIGN KEY (makeup_room_id) REFERENCES room(room_id);
+
+CREATE TABLE chat_history (
+    message_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    user_id UNIQUEIDENTIFIER NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
+    message NVARCHAR(MAX) NOT NULL,
+    session_id UNIQUEIDENTIFIER NOT NULL,
+    created_at DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    INDEX IX_chat_history_user_session (user_id, session_id, created_at DESC),
+    INDEX IX_chat_history_session (session_id)
+);
+
+CREATE TABLE knowledge_documents (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    title NVARCHAR(500) NOT NULL,
+    content NVARCHAR(MAX) NOT NULL,
+    content_summary NVARCHAR(2000),
+    document_type VARCHAR(50) NOT NULL CHECK (document_type IN ('faq', 'regulation', 'guide', 'course_info')),
+    role_type VARCHAR(20) CHECK (role_type IN ('student', 'instructor', 'admin') OR role_type IS NULL),
+    embedding_reference VARCHAR(50) DEFAULT 'pinecone' CHECK (embedding_reference IN ('pinecone', 'sqlserver')),
+    metadata NVARCHAR(MAX),
+    created_at DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    updated_at DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    INDEX IX_knowledge_role_type (role_type),
+    INDEX IX_knowledge_doc_type (document_type),
+    INDEX IX_knowledge_created (created_at DESC)
+);
