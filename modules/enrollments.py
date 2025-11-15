@@ -269,15 +269,31 @@ def create_student_enrollments(self):
             enrollment_id = self.generate_uuid()
             
             # Determine enrollment status:
-            # - Past/completed: start_year < 2025 OR Spring 2024-2025 (start_year == 2024, semester_type == 'spring')
-            # - Current/registered: Fall 2025 (start_year == 2025, semester_type == 'fall') OR Summer 2024-2025 (start_year == 2024, semester_type == 'summer')
+            # Current date: November 13, 2025 (end of Summer 2025)
+            from datetime import datetime
+            current_date = datetime(2025, 11, 13).date()
+            
+            # Summer 2025: midterm phase completed, but not fully finished (no final grades)
+            is_summer_2025 = (course['start_year'] == 2025 and course['semester_type'] == 'summer')
+            
+            # Summer 2024-2025 ends around July 2025, so it should be PAST by November 2025
+            is_summer_2024_2025 = (course['start_year'] == 2024 and course['semester_type'] == 'summer')
+            summer_2024_2025_ended = is_summer_2024_2025 and course['semester_end'] < current_date
+            
             is_past = (course['start_year'] < 2024) or \
                      (course['start_year'] == 2024 and course['semester_type'] in ('fall', 'spring')) or \
-                     (course['start_year'] == 2025 and course['semester_type'] == 'spring')
-            is_current = (course['start_year'] == 2024 and course['semester_type'] == 'summer') or \
-                        (course['start_year'] == 2025 and course['semester_type'] == 'fall')
+                     (course['start_year'] == 2025 and course['semester_type'] == 'spring') or \
+                     summer_2024_2025_ended
+            is_current = (course['start_year'] == 2025 and course['semester_type'] == 'fall')
+            is_summer_2025_midterm = is_summer_2025  # Summer 2025 in midterm completion phase
             
-            status = 'completed' if is_past else 'registered'
+            # Enrollment status based on semester phase
+            if is_past:
+                status = 'completed'
+            elif is_summer_2025_midterm:
+                status = 'registered'  # Still registered, midterm phase completed
+            else:
+                status = 'registered'  # Current semesters
             
             enrollment_rows.append([
                 enrollment_id,
@@ -840,9 +856,17 @@ def create_student_enrollments(self):
             continue
         
         grade_status = cc.get('grade_submission_status', 'draft')
-        # Current semesters: Summer 2024-2025 OR Fall 2025
-        is_current = (cc['start_year'] == 2024 and cc['semester_type'] == 'summer') or \
-                    (cc['start_year'] == 2025 and cc['semester_type'] == 'fall')
+        # Current date: November 13, 2025 (end of Summer 2025)
+        from datetime import datetime
+        current_date = datetime(2025, 11, 13).date()
+        
+        # Summer 2025: midterm phase completed (has approved attendance + midterm grades)
+        is_summer_2025 = (cc['start_year'] == 2025 and cc['semester_type'] == 'summer')
+        
+        # Only Fall 2025 is truly "current" with draft grades
+        is_current = (cc['start_year'] == 2025 and cc['semester_type'] == 'fall')
+        
+        # Summer 2025 should NOT get draft grades - it has approved midterm grades already
         
         if is_current and grade_status in ('draft', 'pending'):
             student = next((s for s in self.data['students'] if s['student_id'] == enrollment['student_id']), None)
@@ -855,41 +879,25 @@ def create_student_enrollments(self):
             final_draft = None
             
             if grade_status == 'pending':
-                # FIXED: For summer 2024-2025, ensure ALL enrollments get attendance and midterm grades
-                is_summer_2024_2025 = (cc['start_year'] == 2024 and cc['semester_type'] == 'summer')
-                
-                if is_summer_2024_2025:
-                    # FOR SUMMER 2024-2025: ALL students get attendance and midterm grades
+                # Only Fall 2025 should have pending draft grades
+                rand = random.random()
+                if rand < 0.85:
                     attendance_draft = round(random.uniform(att_min, att_max), 2)
                     midterm_draft = round(random.uniform(mid_min, mid_max), 2)
                     final_draft = None
                 else:
-                    # For other semesters, use random distribution
-                    rand = random.random()
-                    if rand < 0.85:
-                        attendance_draft = round(random.uniform(att_min, att_max), 2)
-                        midterm_draft = round(random.uniform(mid_min, mid_max), 2)
-                        final_draft = None
-                    else:
-                        attendance_draft = round(random.uniform(att_min, att_max), 2)
-                        midterm_draft = None
-                        final_draft = None
+                    attendance_draft = round(random.uniform(att_min, att_max), 2)
+                    midterm_draft = None
+                    final_draft = None
             
             elif grade_status == 'draft':
-                # FIXED: For summer 2024-2025, ensure ALL enrollments get attendance and midterm grades
-                is_summer_2024_2025 = (cc['start_year'] == 2024 and cc['semester_type'] == 'summer')
-                
+                # Only Fall 2025 should have draft grades
                 if is_fixed:
                     attendance_draft = round(random.uniform(7.5, 9.5), 2)
                     midterm_draft = round(random.uniform(6.5, 9.0), 2)
                     final_draft = None
-                elif is_summer_2024_2025:
-                    # FOR SUMMER 2024-2025: ALL students get attendance and midterm grades
-                    attendance_draft = round(random.uniform(att_min, att_max), 2)
-                    midterm_draft = round(random.uniform(mid_min, mid_max), 2)
-                    final_draft = None
                 else:
-                    # For other semesters, use random distribution
+                    # For Fall 2025, use random distribution
                     rand = random.random()
                     if rand < 0.40:
                         attendance_draft = round(random.uniform(att_min, att_max), 2)
@@ -923,7 +931,20 @@ def create_student_enrollments(self):
     for cc in self.data['course_classes']:
         grade_status = cc.get('grade_submission_status', 'draft')
         
-        if grade_status not in ('approved', 'pending'):
+        # FIXED: Include Summer 2024-2025 even if status is 'draft'
+        semester = next((s for s in self.data['semesters'] 
+                        if s['semester_id'] == cc['semester_id']), None)
+        
+        is_summer_2024_2025 = False
+        if semester:
+            is_summer_2024_2025 = (
+                semester['semester_type'] == 'summer' and 
+                semester.get('start_year') == 2024 and 
+                semester.get('end_year') == 2025
+            )
+        
+        # Skip if not approved/pending, UNLESS it's Summer 2024-2025 (force include)
+        if not is_summer_2024_2025 and grade_status not in ('approved', 'pending'):
             continue
         
         course_class_id = cc['course_class_id']
@@ -968,31 +989,60 @@ def create_student_enrollments(self):
         for enrollment in enrollments:
             grade_detail_id = self.generate_uuid()
             
-            # Determine if course is past or current for grade purposes
-            # Past: start_year < 2024 OR Spring 2024-2025 (start_year == 2024, semester_type == 'spring') OR Fall 2024
-            # Current: Summer 2024-2025 (start_year == 2024, semester_type == 'summer') OR Fall 2025
-            is_past = (cc['start_year'] < 2024) or \
-                     (cc['start_year'] == 2024 and cc['semester_type'] in ('fall', 'spring')) or \
-                     (cc['start_year'] == 2025 and cc['semester_type'] == 'spring')
-            is_current = (cc['start_year'] == 2024 and cc['semester_type'] == 'summer') or \
-                        (cc['start_year'] == 2025 and cc['semester_type'] == 'fall')
-            
+            # Determine grade type based on semester timing
+            # Get the actual semester for this course class
+            semester = next((s for s in self.data['semesters'] 
+                            if s['semester_id'] == cc['semester_id']), None)
+
+            if not semester:
+                continue
+
+            # Summer 2024-2025: academic year 2024-2025 ending in November 2025
+            is_summer_2024_2025 = (
+                semester['semester_type'] == 'summer' and 
+                semester.get('start_year') == 2024 and 
+                semester.get('end_year') == 2025
+            )
+
+            # Past semesters (fully completed with all grades)
+            is_past = (
+                (semester.get('start_year', 0) < 2024) or 
+                (semester.get('start_year') == 2024 and semester['semester_type'] in ('fall', 'spring')) or
+                (semester.get('start_year') == 2025 and semester['semester_type'] == 'spring')
+            )
+
+            # Current semesters
+            is_fall_2025 = (semester.get('start_year') == 2025 and semester['semester_type'] == 'fall')
+
             attendance = None
             midterm = None
             final = None
-            
+
             if grade_status == 'approved':
                 if is_past:
+                    # Completed semesters: full grades (attendance + midterm + final)
                     attendance = round(random.uniform(att_min, att_max), 2)
                     midterm = round(random.uniform(max(mid_min, 5.5), mid_max), 2)
                     final = round(random.uniform(max(fin_min, 6.0), fin_max), 2)
-                elif is_current:
+                elif is_summer_2024_2025:
+                    # Summer 2024-2025: midterm phase completed (attendance + midterm only, NO final)
+                    attendance = round(random.uniform(att_min, att_max), 2)
+                    midterm = round(random.uniform(mid_min, mid_max), 2)
+                    final = None  # NO final grades yet for Summer 2024-2025
+                elif is_fall_2025:
+                    # Fall 2025: shouldn't have approved grades yet, but handle if needed
                     attendance = round(random.uniform(att_min, att_max), 2)
                     midterm = round(random.uniform(mid_min, mid_max), 2)
                     final = None
-            
+
             elif grade_status == 'pending':
-                if is_current:
+                if is_past:
+                    # Past semesters pending approval: full grades
+                    attendance = round(random.uniform(att_min, att_max), 2)
+                    midterm = round(random.uniform(max(mid_min, 5.5), mid_max), 2)
+                    final = round(random.uniform(max(fin_min, 6.0), fin_max), 2)
+                elif is_summer_2024_2025 or is_fall_2025:
+                    # Current semesters pending: attendance + midterm only
                     attendance = round(random.uniform(att_min, att_max), 2)
                     midterm = round(random.uniform(mid_min, mid_max), 2)
                     final = None

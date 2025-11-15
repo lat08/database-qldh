@@ -546,6 +546,7 @@ CREATE TABLE course (
     course_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     subject_id UNIQUEIDENTIFIER NOT NULL,
     semester_id UNIQUEIDENTIFIER NOT NULL,
+    course_code NVARCHAR(50) NOT NULL,
     fee_per_credit NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (fee_per_credit >= 0),
     course_status NVARCHAR(20) DEFAULT 'active' CHECK (course_status IN ('active', 'inactive', 'completed', 'cancelled')),
 
@@ -559,7 +560,8 @@ CREATE TABLE course (
     CONSTRAINT FK_course_subject FOREIGN KEY (subject_id) 
         REFERENCES subject(subject_id) ON DELETE CASCADE,
     CONSTRAINT FK_course_semester FOREIGN KEY (semester_id) 
-        REFERENCES semester(semester_id) ON DELETE CASCADE
+        REFERENCES semester(semester_id) ON DELETE CASCADE,
+    CONSTRAINT UQ_course_code UNIQUE (course_code)
 );
 
 -- ============================================================
@@ -570,6 +572,7 @@ CREATE TABLE course_class (
     course_id UNIQUEIDENTIFIER NOT NULL,
     instructor_id UNIQUEIDENTIFIER NULL,
     room_id UNIQUEIDENTIFIER NOT NULL,
+    course_class_code NVARCHAR(50) NOT NULL,
     date_start DATE NOT NULL,
     date_end DATE NOT NULL,
     max_students INT NOT NULL CHECK (max_students > 0),
@@ -617,7 +620,8 @@ CREATE TABLE course_class (
         )
     ),
 
-    CONSTRAINT CHK_course_class_dates CHECK (date_end > date_start)
+    CONSTRAINT CHK_course_class_dates CHECK (date_end > date_start),
+    CONSTRAINT UQ_course_class_code UNIQUE (course_class_code)
 );
 
 -- ============================================================
@@ -778,6 +782,7 @@ CREATE TABLE schedule_change (
 CREATE TABLE document (
     document_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     course_class_id UNIQUEIDENTIFIER NOT NULL,
+	file_title NVARCHAR(500) NOT NULL,
     file_name NVARCHAR(500) NOT NULL,
 	document_type NVARCHAR(20) NOT NULL CHECK (document_type IN (N'Bài tập', N'Tài liệu', N'Slide', N'Bài LAB')),
     file_path NVARCHAR(1000) NOT NULL,
@@ -807,6 +812,7 @@ CREATE TABLE notification_schedule (
     notification_type NVARCHAR(50) NOT NULL CHECK (notification_type IN ('event', 'tuition', 'schedule', 'important')),
     title NVARCHAR(500) NOT NULL,
     content NVARCHAR(MAX),
+    notice_message NVARCHAR(1000) NULL,
     scheduled_date DATETIME2 NOT NULL,
     visible_from DATETIME2 NOT NULL,
     is_read BIT NOT NULL DEFAULT 0,
@@ -1248,7 +1254,7 @@ CREATE INDEX idx_theme_history_admin ON theme_history(changed_by_admin_id);
 CREATE INDEX idx_theme_history_action ON theme_history(action);
 CREATE INDEX idx_theme_history_created ON theme_history(created_at);
 
-CREATE TABLE change_schedule_request (
+CREATE TABLE schedule_change_request (
     schedule_change_request_id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
     course_class_id UNIQUEIDENTIFIER NOT NULL,
     cancelled_week INT NOT NULL,
@@ -1269,12 +1275,12 @@ CREATE TABLE change_schedule_request (
     is_deleted BIT NOT NULL DEFAULT 0
 );
 
-ALTER TABLE change_schedule_request
-ADD CONSTRAINT FK_change_schedule_request_course_class
+ALTER TABLE schedule_change_request
+ADD CONSTRAINT FK_schedule_change_request_course_class
 FOREIGN KEY (course_class_id) REFERENCES course_class(course_class_id);
 
-ALTER TABLE change_schedule_request
-ADD CONSTRAINT FK_change_schedule_request_room
+ALTER TABLE schedule_change_request
+ADD CONSTRAINT FK_schedule_change_request_room
 FOREIGN KEY (makeup_room_id) REFERENCES room(room_id);
 
 CREATE TABLE chat_history (
@@ -1303,3 +1309,243 @@ CREATE TABLE knowledge_documents (
     INDEX IX_knowledge_doc_type (document_type),
     INDEX IX_knowledge_created (created_at DESC)
 );
+
+-- ============================================================
+-- INDEXES FOR PERFORMANCE OPTIMIZATION
+-- ============================================================
+
+-- ROLE_PERMISSION indexes
+CREATE INDEX IX_role_permission_role_id ON role_permission(role_id);
+CREATE INDEX IX_role_permission_permission_id ON role_permission(permission_id);
+
+-- PERSON indexes
+CREATE INDEX IX_person_email ON person(email);
+CREATE INDEX IX_person_citizen_id ON person(citizen_id) WHERE citizen_id IS NOT NULL;
+
+-- USER_ACCOUNT indexes
+CREATE INDEX IX_user_account_person_id ON user_account(person_id);
+CREATE INDEX IX_user_account_role_id ON user_account(role_id);
+CREATE INDEX IX_user_account_username ON user_account(username);
+CREATE INDEX IX_user_account_email_verified ON user_account(email_verified);
+CREATE INDEX IX_user_account_account_status ON user_account(account_status) WHERE account_status = 'active';
+
+-- ADMIN indexes
+CREATE INDEX IX_admin_person_id ON admin(person_id);
+CREATE INDEX IX_admin_admin_code ON admin(admin_code);
+
+-- OTP & REFRESH TOKEN indexes
+CREATE INDEX IX_user_otp_user_id ON user_otp(user_id);
+CREATE INDEX IX_user_otp_expired_at ON user_otp(expired_at);
+CREATE INDEX IX_user_refresh_token_user_id ON user_refresh_token(user_id);
+CREATE INDEX IX_user_refresh_token_expires_at ON user_refresh_token(expires_at);
+
+-- ROOM indexes
+CREATE INDEX IX_room_building_id ON room(building_id);
+CREATE INDEX IX_room_room_code ON room(room_code);
+CREATE INDEX IX_room_room_type ON room(room_type);
+CREATE INDEX IX_room_room_status ON room(room_status) WHERE room_status = 'active';
+
+-- ROOM_AMENITY_MAPPING indexes
+CREATE INDEX IX_room_amenity_mapping_room_id ON room_amenity_mapping(room_id);
+CREATE INDEX IX_room_amenity_mapping_amenity_id ON room_amenity_mapping(amenity_id);
+
+-- SEMESTER indexes
+CREATE INDEX IX_semester_academic_year_id ON semester(academic_year_id);
+CREATE INDEX IX_semester_semester_type ON semester(semester_type);
+CREATE INDEX IX_semester_dates ON semester(start_date, end_date);
+CREATE INDEX IX_semester_registration_dates ON semester(registration_start_date, registration_end_date);
+
+-- DIVISION indexes
+CREATE INDEX IX_division_division_code ON division(division_code);
+CREATE INDEX IX_division_dean_id ON division(dean_id) WHERE dean_id IS NOT NULL;
+
+-- FACULTY indexes
+CREATE INDEX IX_faculty_faculty_code ON faculty(faculty_code);
+CREATE INDEX IX_faculty_division_id ON faculty(division_id);
+CREATE INDEX IX_faculty_dean_id ON faculty(dean_id) WHERE dean_id IS NOT NULL;
+
+-- DEPARTMENT indexes
+CREATE INDEX IX_department_faculty_id ON department(faculty_id);
+CREATE INDEX IX_department_department_code ON department(department_code);
+
+-- INSTRUCTOR indexes
+CREATE INDEX IX_instructor_person_id ON instructor(person_id);
+CREATE INDEX IX_instructor_instructor_code ON instructor(instructor_code);
+CREATE INDEX IX_instructor_faculty_id ON instructor(faculty_id) WHERE faculty_id IS NOT NULL;
+CREATE INDEX IX_instructor_employment_status ON instructor(employment_status) WHERE employment_status = 'active';
+
+-- SUBJECT indexes
+CREATE INDEX IX_subject_department_id ON subject(department_id);
+CREATE INDEX IX_subject_subject_code ON subject(subject_code);
+CREATE INDEX IX_subject_prerequisite_subject_id ON subject(prerequisite_subject_id) WHERE prerequisite_subject_id IS NOT NULL;
+CREATE INDEX IX_subject_subject_status ON subject(subject_status) WHERE subject_status = 'active';
+
+-- CURRICULUM indexes
+CREATE INDEX IX_curriculum_department_id ON curriculum(department_id);
+CREATE INDEX IX_curriculum_curriculum_code ON curriculum(curriculum_code);
+CREATE INDEX IX_curriculum_applied_year ON curriculum(applied_year);
+
+-- CURRICULUM_DETAIL indexes
+CREATE INDEX IX_curriculum_detail_curriculum_id ON curriculum_detail(curriculum_id);
+CREATE INDEX IX_curriculum_detail_subject_id ON curriculum_detail(subject_id);
+CREATE INDEX IX_curriculum_detail_year_semester ON curriculum_detail(academic_year_index, semester_index);
+
+-- CLASS indexes
+CREATE INDEX IX_class_department_id ON class(department_id);
+CREATE INDEX IX_class_class_code ON class(class_code);
+CREATE INDEX IX_class_advisor_instructor_id ON class(advisor_instructor_id) WHERE advisor_instructor_id IS NOT NULL;
+CREATE INDEX IX_class_training_system_id ON class(training_system_id);
+CREATE INDEX IX_class_start_academic_year_id ON class(start_academic_year_id);
+CREATE INDEX IX_class_curriculum_id ON class(curriculum_id) WHERE curriculum_id IS NOT NULL;
+CREATE INDEX IX_class_class_status ON class(class_status) WHERE class_status = 'active';
+
+-- STUDENT indexes
+CREATE INDEX IX_student_person_id ON student(person_id);
+CREATE INDEX IX_student_student_code ON student(student_code);
+CREATE INDEX IX_student_class_id ON student(class_id) WHERE class_id IS NOT NULL;
+CREATE INDEX IX_student_enrollment_status ON student(enrollment_status);
+
+-- COURSE indexes
+CREATE INDEX IX_course_subject_id ON course(subject_id);
+CREATE INDEX IX_course_semester_id ON course(semester_id);
+CREATE INDEX IX_course_course_status ON course(course_status) WHERE course_status = 'active';
+
+-- COURSE_CLASS indexes
+CREATE INDEX IX_course_class_course_id ON course_class(course_id);
+CREATE INDEX IX_course_class_instructor_id ON course_class(instructor_id) WHERE instructor_id IS NOT NULL;
+CREATE INDEX IX_course_class_room_id ON course_class(room_id);
+CREATE INDEX IX_course_class_dates ON course_class(date_start, date_end);
+CREATE INDEX IX_course_class_day_of_week ON course_class(day_of_week);
+CREATE INDEX IX_course_class_grade_submission_status ON course_class(grade_submission_status);
+CREATE INDEX IX_course_class_course_class_status ON course_class(course_class_status) WHERE course_class_status = 'active';
+
+-- STUDENT_ENROLLMENT indexes
+CREATE INDEX IX_student_enrollment_student_id ON student_enrollment(student_id);
+CREATE INDEX IX_student_enrollment_course_class_id ON student_enrollment(course_class_id);
+CREATE INDEX IX_student_enrollment_enrollment_date ON student_enrollment(enrollment_date);
+CREATE INDEX IX_student_enrollment_enrollment_status ON student_enrollment(enrollment_status);
+
+-- ENROLLMENT_DRAFT_GRADE indexes
+CREATE INDEX IX_enrollment_draft_grade_enrollment_id ON enrollment_draft_grade(enrollment_id);
+
+-- ENROLLMENT_GRADE_VERSION indexes
+CREATE INDEX IX_enrollment_grade_version_course_class_id ON enrollment_grade_version(course_class_id);
+CREATE INDEX IX_enrollment_grade_version_version_status ON enrollment_grade_version(version_status);
+CREATE INDEX IX_enrollment_grade_version_submitted_by ON enrollment_grade_version(submitted_by) WHERE submitted_by IS NOT NULL;
+CREATE INDEX IX_enrollment_grade_version_approved_by ON enrollment_grade_version(approved_by) WHERE approved_by IS NOT NULL;
+
+-- ENROLLMENT_GRADE_DETAIL indexes
+CREATE INDEX IX_enrollment_grade_detail_grade_version_id ON enrollment_grade_detail(grade_version_id);
+CREATE INDEX IX_enrollment_grade_detail_enrollment_id ON enrollment_grade_detail(enrollment_id);
+
+-- SCHEDULE_CHANGE indexes
+CREATE INDEX IX_schedule_change_course_class_id ON schedule_change(course_class_id);
+CREATE INDEX IX_schedule_change_makeup_room_id ON schedule_change(makeup_room_id) WHERE makeup_room_id IS NOT NULL;
+CREATE INDEX IX_schedule_change_makeup_date ON schedule_change(makeup_date) WHERE makeup_date IS NOT NULL;
+
+-- DOCUMENT indexes
+CREATE INDEX IX_document_course_class_id ON document(course_class_id);
+CREATE INDEX IX_document_uploaded_by ON document(uploaded_by) WHERE uploaded_by IS NOT NULL;
+CREATE INDEX IX_document_document_type ON document(document_type);
+CREATE INDEX IX_document_created_at ON document(created_at DESC);
+
+-- NOTIFICATION_SCHEDULE indexes
+CREATE INDEX IX_notification_schedule_scheduled_date ON notification_schedule(scheduled_date);
+CREATE INDEX IX_notification_schedule_visible_from ON notification_schedule(visible_from);
+CREATE INDEX IX_notification_schedule_notification_type ON notification_schedule(notification_type);
+CREATE INDEX IX_notification_schedule_target_type ON notification_schedule(target_type);
+CREATE INDEX IX_notification_schedule_target_id ON notification_schedule(target_id) WHERE target_id IS NOT NULL;
+CREATE INDEX IX_notification_schedule_created_by_user ON notification_schedule(created_by_user);
+CREATE INDEX IX_notification_schedule_status ON notification_schedule(status);
+
+-- EXAM indexes
+CREATE INDEX IX_exam_course_id ON exam(course_id);
+CREATE INDEX IX_exam_exam_type ON exam(exam_type);
+CREATE INDEX IX_exam_exam_status ON exam(exam_status);
+
+-- EXAM_ENTRY indexes
+CREATE INDEX IX_exam_entry_exam_id ON exam_entry(exam_id);
+CREATE INDEX IX_exam_entry_course_class_id ON exam_entry(course_class_id);
+CREATE INDEX IX_exam_entry_entry_status ON exam_entry(entry_status);
+CREATE INDEX IX_exam_entry_is_picked ON exam_entry(is_picked);
+CREATE INDEX IX_exam_entry_reviewed_by ON exam_entry(reviewed_by) WHERE reviewed_by IS NOT NULL;
+
+-- EXAM_CLASS indexes
+CREATE INDEX IX_exam_class_exam_id ON exam_class(exam_id);
+CREATE INDEX IX_exam_class_course_class_id ON exam_class(course_class_id);
+CREATE INDEX IX_exam_class_room_id ON exam_class(room_id);
+CREATE INDEX IX_exam_class_monitor_instructor_id ON exam_class(monitor_instructor_id) WHERE monitor_instructor_id IS NOT NULL;
+CREATE INDEX IX_exam_class_start_time ON exam_class(start_time);
+CREATE INDEX IX_exam_class_exam_status ON exam_class(exam_status);
+
+-- STUDENT_HEALTH_INSURANCE indexes
+CREATE INDEX IX_student_health_insurance_student_id ON student_health_insurance(student_id);
+CREATE INDEX IX_student_health_insurance_academic_year_id ON student_health_insurance(academic_year_id);
+CREATE INDEX IX_student_health_insurance_dates ON student_health_insurance(start_date, end_date);
+CREATE INDEX IX_student_health_insurance_insurance_status ON student_health_insurance(insurance_status);
+
+-- PAYMENT_ENROLLMENT indexes
+CREATE INDEX IX_payment_enrollment_student_id ON payment_enrollment(student_id);
+CREATE INDEX IX_payment_enrollment_semester_id ON payment_enrollment(semester_id);
+CREATE INDEX IX_payment_enrollment_payment_date ON payment_enrollment(payment_date);
+CREATE INDEX IX_payment_enrollment_payment_status ON payment_enrollment(payment_status);
+
+-- PAYMENT_ENROLLMENT_DETAIL indexes
+CREATE INDEX IX_payment_enrollment_detail_payment_id ON payment_enrollment_detail(payment_id);
+CREATE INDEX IX_payment_enrollment_detail_enrollment_id ON payment_enrollment_detail(enrollment_id);
+
+-- PAYMENT_INSURANCE indexes
+CREATE INDEX IX_payment_insurance_insurance_id ON payment_insurance(insurance_id);
+CREATE INDEX IX_payment_insurance_payment_date ON payment_insurance(payment_date);
+CREATE INDEX IX_payment_insurance_payment_status ON payment_insurance(payment_status);
+
+-- ROOM_BOOKING indexes
+CREATE INDEX IX_room_booking_room_id ON room_booking(room_id);
+CREATE INDEX IX_room_booking_booked_by ON room_booking(booked_by);
+CREATE INDEX IX_room_booking_booking_date ON room_booking(booking_date);
+CREATE INDEX IX_room_booking_booking_status ON room_booking(booking_status);
+CREATE INDEX IX_room_booking_room_date ON room_booking(room_id, booking_date);
+
+-- REGULATION indexes
+CREATE INDEX IX_regulation_target ON regulation(target);
+CREATE INDEX IX_regulation_created_by_admin ON regulation(created_by_admin);
+CREATE INDEX IX_regulation_expire_date ON regulation(expire_date) WHERE expire_date IS NOT NULL;
+
+-- STUDENT_VERIFICATION_REQUEST indexes
+CREATE INDEX IX_student_verification_request_student_id ON student_verification_request(student_id);
+CREATE INDEX IX_student_verification_request_request_status ON student_verification_request(request_status);
+CREATE INDEX IX_student_verification_request_created_at ON student_verification_request(created_at DESC);
+
+-- PAYMENT_POSTPONEMENT_REQUEST indexes
+CREATE INDEX IX_payment_postponement_request_student_id ON payment_postponement_request(student_id);
+CREATE INDEX IX_payment_postponement_request_semester_id ON payment_postponement_request(semester_id);
+CREATE INDEX IX_payment_postponement_request_request_status ON payment_postponement_request(request_status);
+CREATE INDEX IX_payment_postponement_request_reviewed_by ON payment_postponement_request(reviewed_by) WHERE reviewed_by IS NOT NULL;
+
+-- NOTE indexes
+CREATE INDEX IX_note_student_id ON note(student_id);
+CREATE INDEX IX_note_created_at ON note(created_at DESC);
+
+-- SCHEDULE_CHANGE_REQUEST indexes
+CREATE INDEX IX_schedule_change_request_course_class_id ON schedule_change_request(course_class_id);
+CREATE INDEX IX_schedule_change_request_makeup_room_id ON schedule_change_request(makeup_room_id) WHERE makeup_room_id IS NOT NULL;
+CREATE INDEX IX_schedule_change_request_status ON schedule_change_request(status);
+CREATE INDEX IX_schedule_change_request_created_by ON schedule_change_request(created_by) WHERE created_by IS NOT NULL;
+CREATE INDEX IX_schedule_change_request_reviewed_by ON schedule_change_request(reviewed_by) WHERE reviewed_by IS NOT NULL;
+
+-- CHAT_HISTORY indexes (already defined in table creation, including these for completeness)
+-- IX_chat_history_user_session already exists
+-- IX_chat_history_session already exists
+
+-- KNOWLEDGE_DOCUMENTS indexes (already defined in table creation, including these for completeness)
+-- IX_knowledge_role_type already exists
+-- IX_knowledge_doc_type already exists
+-- IX_knowledge_created already exists
+
+-- Composite indexes for common query patterns
+CREATE INDEX IX_course_class_schedule ON course_class(date_start, date_end, day_of_week, start_period, end_period);
+CREATE INDEX IX_student_enrollment_active ON student_enrollment(student_id, enrollment_status) WHERE enrollment_status = 'registered';
+CREATE INDEX IX_notification_schedule_pending ON notification_schedule(visible_from, status) WHERE status = 'pending';
+CREATE INDEX IX_exam_entry_pending_approval ON exam_entry(exam_id, entry_status) WHERE entry_status = 'pending';
+
+GO

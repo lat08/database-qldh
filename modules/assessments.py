@@ -14,6 +14,8 @@ def create_exams_and_exam_entries(self):
     self.add_statement("-- exam: course-level exam definition")
     self.add_statement("-- exam_entry: instructor submissions (PDFs, approval workflow)")
     self.add_statement("-- exam_class: specific exam schedule with room and time")
+    self.add_statement("-- IMPROVED: All course classes now have exam entries (was 60% before)")
+    self.add_statement("-- IMPROVED: Exam entry submission dates vary 2-6 weeks before exam with realistic hours")
     
     exam_rows = []
     exam_entry_rows = []
@@ -102,7 +104,9 @@ def create_exams_and_exam_entries(self):
         submitted_entries = []
         
         for cc in course_classes:
-            if random.random() < 0.6:
+            # FIXED: Create exam entries for ALL course classes (was 60% before)
+            # This ensures every exam has instructor submissions
+            if True:  # Always create exam entries
                 exam_entry_id = self.generate_uuid()
                 
                 # Display name (instructor's submission identifier)
@@ -121,6 +125,18 @@ def create_exams_and_exam_entries(self):
                 # Duration
                 duration_minutes = random.choice([90, 120, 150, 180])
                 
+                # Generate varied submission and review times
+                # Exam entries typically submitted weeks before exam date
+                days_before_exam = random.randint(15, 45)  # 2-6 weeks before
+                submission_hour = random.choice([9, 10, 11, 13, 14, 15, 16, 17] + [20, 21, 22])  # Business hours + some evening
+                submission_minute = random.choice([0, 15, 30, 45] + [random.randint(0, 59)] * 2)
+                
+                submitted_at = datetime.now() - timedelta(
+                    days=days_before_exam,
+                    hours=random.randint(-12, 12)  # Some variation around the day
+                )
+                submitted_at = submitted_at.replace(hour=submission_hour, minute=submission_minute, second=0, microsecond=0)
+                
                 # Approval status (80% approved, 15% pending, 5% rejected)
                 status_rand = random.random()
                 if status_rand < 0.80:
@@ -129,7 +145,8 @@ def create_exams_and_exam_entries(self):
                     entry_code = None
                     rejection_reason = None
                     reviewed_by = admin_id
-                    reviewed_at = datetime.now() - timedelta(days=random.randint(5, 30))
+                    # Review 1-7 days after submission
+                    reviewed_at = submitted_at + timedelta(days=random.randint(1, 7), hours=random.randint(-4, 4))
                 elif status_rand < 0.95:
                     entry_status = 'pending'
                     is_picked = False
@@ -148,7 +165,8 @@ def create_exams_and_exam_entries(self):
                         'Cần bổ sung câu hỏi'
                     ])
                     reviewed_by = admin_id
-                    reviewed_at = datetime.now() - timedelta(days=random.randint(1, 15))
+                    # Review 1-3 days after submission for rejections (faster processing)
+                    reviewed_at = submitted_at + timedelta(days=random.randint(1, 3), hours=random.randint(-2, 2))
                 
                 exam_entry_rows.append([
                     exam_entry_id,
@@ -163,7 +181,8 @@ def create_exams_and_exam_entries(self):
                     entry_status,
                     rejection_reason,
                     reviewed_by,
-                    reviewed_at
+                    reviewed_at,
+                    submitted_at.strftime('%Y-%m-%d %H:%M:%S')  # Add created_at (submission time)
                 ])
                 
                 if entry_status == 'approved':
@@ -676,6 +695,16 @@ def create_exams_and_exam_entries(self):
                             
                             duration_minutes = random.choice([90, 120, 150, 180])
                             
+                            # Generate realistic submission and review dates
+                            days_before_exam = random.randint(15, 35)
+                            submitted_at = datetime.now() - timedelta(days=days_before_exam)
+                            submitted_at = submitted_at.replace(
+                                hour=random.choice([9, 10, 11, 14, 15, 16]),
+                                minute=random.choice([0, 15, 30, 45]),
+                                second=0, microsecond=0
+                            )
+                            reviewed_at = submitted_at + timedelta(days=random.randint(2, 7))
+                            
                             exam_entry_rows.append([
                                 exam_entry_id,
                                 exam_id,
@@ -689,7 +718,8 @@ def create_exams_and_exam_entries(self):
                                 'approved',  # entry_status
                                 None,  # rejection_reason
                                 admin_id,  # reviewed_by
-                                datetime.now() - timedelta(days=random.randint(5, 30))  # reviewed_at
+                                reviewed_at,  # reviewed_at
+                                submitted_at.strftime('%Y-%m-%d %H:%M:%S')  # created_at
                             ])
                         
                         # Find an available time slot for this specific date
@@ -932,7 +962,7 @@ def create_exams_and_exam_entries(self):
                     ['exam_entry_id', 'exam_id', 'course_class_id', 'entry_code',
                     'display_name', 'question_file_path', 'answer_file_path',
                     'duration_minutes', 'is_picked', 'entry_status', 'rejection_reason',
-                    'reviewed_by', 'reviewed_at'],
+                    'reviewed_by', 'reviewed_at', 'created_at'],
                     exam_entry_rows)
     
     # Insert exam_class schedules

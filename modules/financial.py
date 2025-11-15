@@ -209,18 +209,6 @@ def create_payments(self):
         if not insurance.get('should_have_payment'):
             continue
         
-        is_test_student = insurance['student_id'] in test_student_ids
-        
-        # Test students: 50% paid (deterministic), Regular: 80% chance
-        should_pay_insurance = False
-        if is_test_student:
-            should_pay_insurance = (hash(insurance['insurance_id']) % 2 == 0)
-        else:
-            should_pay_insurance = (random.random() <= 0.80)
-        
-        if not should_pay_insurance:
-            continue
-        
         payment_id = self.generate_uuid()
         
         # Payment date: random within first 3 months of insurance period

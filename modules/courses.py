@@ -42,13 +42,40 @@ def create_courses(self):
         else:
             rate = summer_rate
         
-        # UPDATED: Prioritize curriculum subjects (80%) and include some electives (20%)
+    # UPDATED: Prioritize curriculum subjects (80%) and include some electives (20%)
         total_to_offer = int(len(self.data['subjects']) * rate)
         curriculum_to_offer = min(len(curriculum_subject_list), int(total_to_offer * 0.8))
         elective_to_offer = min(len(non_curriculum_subject_list), total_to_offer - curriculum_to_offer)
         
         # Select curriculum subjects (prioritized)
         curriculum_selected = random.sample(curriculum_subject_list, curriculum_to_offer) if curriculum_to_offer > 0 else []
+
+        # SPECIAL: For Fall 2025, ensure some subjects from the test student's curriculum
+        # are included so that the fixed test student has available offerings.
+        if semester.get('start_year') == 2025 and semester.get('semester_type') == 'fall':
+            test_student_id = self.data['fixed_accounts'].get('student', {}).get('student_id')
+            if test_student_id:
+                test_student = next((s for s in self.data['students'] if s['student_id'] == test_student_id), None)
+                if test_student:
+                    test_class = next((c for c in self.data['classes'] if c['class_id'] == test_student['class_id']), None)
+                    if test_class:
+                        test_curriculum_id = test_class.get('curriculum_id')
+                        test_curriculum_subjects = {cd['subject_id'] for cd in self.data.get('curriculum_details', []) if cd['curriculum_id'] == test_curriculum_id}
+                        # pick up to 6 subjects from the test student's curriculum to force into fall offerings
+                        preferred = [s for s in curriculum_subject_list if s['subject_id'] in test_curriculum_subjects]
+                        if preferred:
+                            need = min(6, len(preferred))
+                            # choose candidates not already in curriculum_selected
+                            remaining_slots = [s for s in preferred if s not in curriculum_selected]
+                            to_add = random.sample(remaining_slots, min(len(remaining_slots), need)) if remaining_slots else []
+                            # ensure we don't exceed curriculum_to_offer count
+                            for s in to_add:
+                                if len(curriculum_selected) < curriculum_to_offer:
+                                    curriculum_selected.append(s)
+                                else:
+                                    # replace a random elective spot if we hit limit
+                                    idx = random.randrange(len(curriculum_selected))
+                                    curriculum_selected[idx] = s
         
         # Select elective subjects
         elective_selected = random.sample(non_curriculum_subject_list, elective_to_offer) if elective_to_offer > 0 else []
@@ -60,11 +87,18 @@ def create_courses(self):
         for subject in subjects_to_offer:
             course_id = self.generate_uuid()
             
+            # Generate course code: format {subject_code}{year}{semester_type_upper}
+            # Example: CS101 + 2025 + FALL = CS1012025FALL
+            subject_code_clean = subject['subject_code'].replace(' ', '').replace('-', '')
+            semester_type_upper = semester['semester_type'].upper()
+            course_code = f"{subject_code_clean}{semester['start_year']}{semester_type_upper}"
+            
             self.data['courses'].append({
                 'course_id': course_id,
                 'subject_id': subject['subject_id'],
                 'subject_code': subject['subject_code'],
                 'subject_name': subject['subject_name'],
+                'course_code': course_code,
                 'credits': subject['credits'],
                 'theory_hours': subject['theory_hours'],
                 'practice_hours': subject['practice_hours'],
@@ -75,11 +109,13 @@ def create_courses(self):
                 'semester_type': semester['semester_type']
             })
             
-            course_rows.append([course_id, subject['subject_id'], semester['semester_id'], fee, 'active'])
+            course_rows.append([course_id, subject['subject_id'], semester['semester_id'], course_code, fee, 'active'])
     
     self.add_statement(f"-- Total courses generated: {len(course_rows)}")
     self.add_statement(f"-- Course selection strategy: 80% curriculum subjects, 20% electives")
-    self.bulk_insert('course', ['course_id', 'subject_id', 'semester_id', 'fee_per_credit', 'course_status'], course_rows)
+    self.add_statement(f"-- Course code format: {{subject_code}}{{year}}{{semester_type}}")
+    self.add_statement(f"-- Example: CS1012025FALL for CS101 in Fall 2025")
+    self.bulk_insert('course', ['course_id', 'subject_id', 'semester_id', 'course_code', 'fee_per_credit', 'course_status'], course_rows)
 
 
 def create_course_classes(self):
@@ -305,6 +341,10 @@ def create_course_classes(self):
                 if not conflict:
                     course_class_id = self.generate_uuid()
                     
+                    # Generate course class code: format {course_code}_{section_number}
+                    # Example: CS1012025FALL_1, CS1012025FALL_2, etc.
+                    course_class_code = f"{course['course_code']}_{session_idx + 1}"
+                    
                     # FIXED: Mark ALL time slots as used for BOTH room AND instructor
                     for day in days:
                         for period in range(time_slot[0], time_slot[1] + 1):
@@ -337,14 +377,25 @@ def create_course_classes(self):
                         session_max_students = random.randint(min_per_section, max_per_section)
                     
                     # Determine grade submission status
-                    # Summer 2024-2025 is current/ongoing, so it should have draft or pending status
+                    # Current date: November 13, 2025 (end of Summer 2025)
+                    current_date = datetime(2025, 11, 13).date()
+                    
+                    # Summer 2025: attendance + midterm completed, but no final grades yet
+                    is_summer_2025 = (course['start_year'] == 2025 and course['semester_type'] == 'summer')
+                    summer_2025_midterm_completed = is_summer_2025  # Summer 2025 has completed midterms by November
+                    
+                    # Summer 2024-2025 ends around July 2025, so it should be PAST by November 2025  
                     is_summer_2024_2025 = (course['start_year'] == 2024 and course['semester_type'] == 'summer')
+                    summer_2024_2025_ended = is_summer_2024_2025 and course_end_date < current_date
+                    
                     is_past = (course['start_year'] < 2024) or \
                              (course['start_year'] == 2024 and course['semester_type'] in ('fall', 'spring')) or \
-                             (course['start_year'] == 2025 and course['semester_type'] == 'spring')
-                    is_current = (course['start_year'] == 2025 and course['semester_type'] == 'fall') or is_summer_2024_2025
+                             summer_2024_2025_ended
+                    is_current = (course['start_year'] == 2025 and course['semester_type'] == 'fall')
+                    is_summer_2025_midterm_phase = summer_2025_midterm_completed
                     
-                    grade_submission_status = 'draft'
+                    # FIXED: Summer 2024-2025 should have 'approved' status by default
+                    grade_submission_status = 'approved' if is_summer_2024_2025 else 'draft'
                     grade_submitted_at = None
                     grade_approved_at = None
                     grade_approved_by = None
@@ -362,32 +413,34 @@ def create_course_classes(self):
                         grade_submission_note = 'All grades completed and verified'
                         grade_approval_note = 'Approved - grades are accurate'
                         grade_workflow_stats['approved'] += 1
-                    
+
+                    elif is_summer_2024_2025:
+                        # Summer 2024-2025: Midterm phase completed (attendance + midterm approved, NO final)
+                        grade_submission_status = 'approved'
+                        submit_date = datetime(2025, 8, random.randint(1, 15))
+                        grade_submitted_at = submit_date.strftime('%Y-%m-%d %H:%M:%S')
+                        approve_date = submit_date + timedelta(days=random.randint(1, 3))
+                        grade_approved_at = approve_date.strftime('%Y-%m-%d %H:%M:%S')
+                        grade_approved_by = admin_id
+                        grade_submission_note = 'Summer 2024-2025 midterm grades completed'
+                        grade_approval_note = 'Approved - attendance and midterm grades verified'
+                        grade_workflow_stats['approved'] += 1
+
+                    elif is_summer_2025_midterm_phase:
+                        # Summer 2025: Midterm phase completed, attendance + midterm grades approved
+                        grade_submission_status = 'approved'
+                        # Midterm grades were submitted in September 2025
+                        submit_date = datetime(2025, 9, random.randint(15, 25))
+                        grade_submitted_at = submit_date.strftime('%Y-%m-%d %H:%M:%S')
+                        approve_date = submit_date + timedelta(days=random.randint(1, 3))
+                        grade_approved_at = approve_date.strftime('%Y-%m-%d %H:%M:%S')
+                        grade_approved_by = admin_id
+                        grade_submission_note = 'Summer 2025 midterm grades completed'
+                        grade_approval_note = 'Approved - attendance and midterm grades verified'
+                        grade_workflow_stats['approved'] += 1
+                        
                     elif is_current:
-                        # For summer 2024-2025, most courses should be in draft or pending status
-                        if is_summer_2024_2025:
-                            rand = random.random()
-                            if rand < 0.50:
-                                grade_submission_status = 'draft'
-                                grade_workflow_stats['draft'] += 1
-                            elif rand < 0.80:
-                                grade_submission_status = 'pending'
-                                submit_date = datetime.now() - timedelta(days=random.randint(1, 5))
-                                grade_submitted_at = submit_date.strftime('%Y-%m-%d %H:%M:%S')
-                                grade_submission_note = 'Midterm grades ready for review'
-                                grade_workflow_stats['pending'] += 1
-                            else:
-                                grade_submission_status = 'approved'
-                                submit_date = datetime.now() - timedelta(days=random.randint(10, 20))
-                                grade_submitted_at = submit_date.strftime('%Y-%m-%d %H:%M:%S')
-                                approve_date = submit_date + timedelta(days=random.randint(1, 3))
-                                grade_approved_at = approve_date.strftime('%Y-%m-%d %H:%M:%S')
-                                grade_approved_by = admin_id
-                                grade_submission_note = 'Early submission'
-                                grade_approval_note = 'Approved - verified'
-                                grade_workflow_stats['approved'] += 1
-                        else:
-                            # Fall 2025
+                        # Fall 2025 - current registration period
                             rand = random.random()
                             if rand < 0.40:
                                 grade_submission_status = 'draft'
@@ -413,12 +466,15 @@ def create_course_classes(self):
                     self.data['course_classes'].append({
                         'course_class_id': course_class_id,
                         'course_id': course['course_id'],
+                        'course_class_code': course_class_code,
                         'subject_id': course['subject_id'],
                         'subject_code': course['subject_code'],
                         'subject_name': course['subject_name'],
                         'semester_id': course['semester_id'],
                         'semester_start': course['semester_start'],
                         'semester_end': course['semester_end'],
+                        'course_class_start': actual_start_date,  # FIXED: Add actual course class dates
+                        'course_class_end': course_end_date,      # FIXED: Add actual course class dates  
                         'start_year': course['start_year'],
                         'semester_type': course['semester_type'],
                         'instructor_id': instructor_id,
@@ -442,6 +498,7 @@ def create_course_classes(self):
                         course['course_id'],
                         instructor_id,
                         room['room_id'],
+                        course_class_code,
                         actual_start_date,
                         course_end_date,
                         session_max_students,
@@ -477,9 +534,11 @@ def create_course_classes(self):
     self.add_statement(f"--       Future semesters (Spring/Summer 2025, 2026+) are NOT opened for registration")
     self.add_statement(f"-- UPDATED: Improved demand calculation includes curriculum + elective courses")
     self.add_statement(f"-- RESULT: Significantly fewer course classes with 0 enrollments")
+    self.add_statement(f"-- Course class code format: {{course_code}}_{{section_number}}")
+    self.add_statement(f"-- Example: CS1012025FALL_1, CS1012025FALL_2, etc.")
     
     self.bulk_insert('course_class', 
-                    ['course_class_id', 'course_id', 'instructor_id', 'room_id', 'date_start', 'date_end', 
+                    ['course_class_id', 'course_id', 'instructor_id', 'room_id', 'course_class_code', 'date_start', 'date_end', 
                     'max_students', 'day_of_week', 'start_period', 'end_period', 'course_class_status',
                     'grade_submission_status', 'grade_submitted_at', 'grade_approved_at', 'grade_approved_by',
                     'grade_submission_note', 'grade_approval_note'],

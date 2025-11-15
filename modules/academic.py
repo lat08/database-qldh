@@ -68,6 +68,56 @@ def create_subjects(self):
             0,
             1
         ])
+
+    # If the spec didn't provide enough general subjects, auto-generate a few
+    # This ensures every curriculum has a healthy set of general subjects (useful for test students)
+    MIN_GENERAL_SUBJECTS = int(self.spec_data.get('min_general_subjects', 8))
+    existing_general_count = len([s for s in self.data['subjects'] if s.get('is_general')])
+    if existing_general_count < MIN_GENERAL_SUBJECTS:
+        needed = MIN_GENERAL_SUBJECTS - existing_general_count
+        default_general_names = [
+            'Toán đại cương', 'Vật lý đại cương', 'Hóa học đại cương', 'Tiếng Anh',
+            'Giáo dục thể chất', 'Kỹ năng học tập', 'Tin học cơ bản', 'Kinh tế học cơ bản',
+            'Lịch sử Việt Nam', 'Triết học Mác-Lênin'
+        ]
+        # Use existing fallback_dept_id for DB constraint but keep is_general True
+        for i in range(needed):
+            subject_name = default_general_names[i % len(default_general_names)] + (f" {i+1}" if i >= len(default_general_names) else "")
+            subject_code = f"GEN{existing_general_count + i + 1:04d}"
+            subject_id = self.generate_uuid()
+
+            self.data['subjects'].append({
+                'subject_id': subject_id,
+                'subject_code': subject_code,
+                'subject_name': subject_name,
+                'credits': 3,
+                'theory_hours': 30,
+                'practice_hours': 0,
+                'is_general': True,
+                'department_id': None,
+                'fee_per_credit': float(self.course_config.get('fee_per_credit', 600000))
+            })
+
+            subject_rows.append([
+                subject_id,
+                subject_name,
+                subject_code,
+                3,
+                30,
+                0,
+                1,
+                fallback_dept_id,
+                None,
+                'active',
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                None,
+                admin_id,
+                None,
+                0,
+                1
+            ])
+
+        self.add_statement(f"-- Auto-generated {needed} general subjects to meet minimum ({MIN_GENERAL_SUBJECTS})")
     
     # =========================================================================
     # SPECIALIZED SUBJECTS (by department, is_general = False)

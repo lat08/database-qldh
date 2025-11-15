@@ -1,6 +1,8 @@
 # ==================== CONFIGURATION ====================
 SPEC_FILE = r'database-qldh\specs.txt' 
 OUTPUT_FILE = r'database-qldh\insert_data_temp.sql'
+# SPEC_FILE = r'database-qldh\specs_new.txt'
+# OUTPUT_FILE = r'database-qldh\insert_data_temp_new.sql'
 
 # ==================== MEDIA CONFIGURATION ====================
 SUPABASE_BASE_URL = "https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public"

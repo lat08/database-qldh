@@ -291,9 +291,9 @@ WHERE cc.is_deleted = 0
         AND se.enrollment_status IN ('registered', 'completed')
   );
 
--- Delete change_schedule_request records for empty course classes (except Fall 2025)
+-- Delete schedule_change_request records for empty course classes (except Fall 2025)
 DELETE csr
-FROM change_schedule_request csr
+FROM schedule_change_request csr
 INNER JOIN course_class cc ON csr.course_class_id = cc.course_class_id
 INNER JOIN course c ON cc.course_id = c.course_id
 WHERE cc.is_deleted = 0 
@@ -523,6 +523,46 @@ PRINT 'Fall 2025 course classes preserved for upcoming registration';"""
         self.add_statement("-- =========================================================================")
         
         self.cleanup_empty_course_classes()
+        
+        # =========================================================================
+        # PHASE 13: PAYMENT PROCESSING - PAY FOR PAST ENROLLMENTS
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 13: PAYMENT PROCESSING - PAY FOR PAST ENROLLMENTS")
+        self.add_statement("-- =========================================================================")
+        
+        # Read and append pay_for_past.sql content
+        pay_for_past_sql_path = r'database-qldh\sql\fix\pay_for_past.sql'
+        try:
+            with open(pay_for_past_sql_path, 'r', encoding='utf-8-sig') as f:
+                pay_for_past_content = f.read().strip()
+                self.add_statement(pay_for_past_content)
+        except FileNotFoundError:
+            self.add_statement(f"-- Warning: pay_for_past.sql file not found at {pay_for_past_sql_path}")
+        except Exception as e:
+            self.add_statement(f"-- Error reading pay_for_past.sql: {str(e)}")
+        
+        self.add_statement("\n-- =========================================================================")
+        
+        # =========================================================================
+        # PHASE 14: CONFLICT RESOLUTION - DELETE CONFLICTING ENTRIES
+        # =========================================================================
+        self.add_statement("\n-- =========================================================================")
+        self.add_statement("-- PHASE 14: CONFLICT RESOLUTION - DELETE CONFLICTING ENTRIES")
+        self.add_statement("-- =========================================================================")
+        
+        # Read and append delete_conflicts.sql content
+        delete_conflicts_sql_path = r'database-qldh\sql\fix\delete_conflicts.sql'
+        try:
+            with open(delete_conflicts_sql_path, 'r', encoding='utf-8-sig') as f:
+                delete_conflicts_content = f.read().strip()
+                self.add_statement(delete_conflicts_content)
+        except FileNotFoundError:
+            self.add_statement(f"-- Warning: delete_conflicts.sql file not found at {delete_conflicts_sql_path}")
+        except Exception as e:
+            self.add_statement(f"-- Error reading delete_conflicts.sql: {str(e)}")
+        
+        self.add_statement("\n-- =========================================================================")
         
         # =========================================================================
         # FINAL STATISTICS

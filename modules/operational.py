@@ -65,6 +65,40 @@ def create_notifications(self):
     admin_id = self.data['fixed_accounts']['admin']['user_id']
     
     # ============================================================
+    # NOTICE MESSAGE TEMPLATES BY TYPE
+    # ============================================================
+    notice_messages = {
+        'important': [
+            'Lưu ý: Thông báo này có mức độ ưu tiên cao, vui lòng đọc kỹ và thực hiện đúng hạn.',
+            'Chú ý: Vui lòng thực hiện theo hướng dẫn để tránh gặp sự cố về sau.',
+            'Quan trọng: Không tuân thủ quy định có thể ảnh hưởng đến việc học tập của bạn.',
+            'Lưu ý: Liên hệ phòng Đào tạo nếu cần hỗ trợ thêm thông tin.',
+            'Thông báo khẩn: Vui lòng hoàn thành trong thời gian quy định.'
+        ],
+        'schedule': [
+            'Lưu ý: Mang theo thẻ sinh viên và CMND/CCCD khi đến lớp.',
+            'Chú ý: Đến đúng giờ để không bị coi là nghỉ học.',
+            'Quan trọng: Kiểm tra phòng học trước khi đến để tránh nhầm lẫn.',
+            'Lưu ý: Thông báo thay đổi lịch học sẽ được cập nhật trên Portal.',
+            'Chú ý: Vắng mặt quá 3 buổi có thể bị cấm thi.'
+        ],
+        'tuition': [
+            'Lưu ý: Đóng học phí đúng hạn để tránh bị khóa tài khoản Portal.',
+            'Quan trọng: Sinh viên chưa đóng học phí sẽ không được đăng ký môn học kỳ tiếp theo.',
+            'Chú ý: Lưu giữ biên lai đóng học phí để đối chiếu khi cần thiết.',
+            'Lưu ý: Có thể đóng học phí qua ngân hàng hoặc trực tiếp tại trường.',
+            'Thông báo: Học phí chậm nộp sẽ bị tính phí phạt 50,000đ/ngày.'
+        ],
+        'event': [
+            'Lưu ý: Đăng ký tham gia sự kiện trước để được ưu tiên chỗ ngồi.',
+            'Chú ý: Mang theo thẻ sinh viên để được xác nhận tham dự.',
+            'Quan trọng: Trang phục lịch sự khi tham gia sự kiện.',
+            'Lưu ý: Sự kiện có thể thay đổi thời gian, theo dõi thông báo mới nhất.',
+            'Chú ý: Số lượng chỗ ngồi có hạn, đến sớm để có chỗ tốt nhất.'
+        ]
+    }
+    
+    # ============================================================
     # SPECIAL NOTIFICATIONS FOR TEST ACCOUNTS (appended on top)
     # ============================================================
     test_notification_templates = [
@@ -82,16 +116,33 @@ def create_notifications(self):
         test_student_class_id = test_student_account.get('class_id')
         
         if test_student_id and test_student_class_id:
-            # Create 20 notifications specifically for test student
-            num_student_notifs = 20
+            # Create 4x more notifications specifically for test student (80 total)
+            num_student_notifs = 80
             for i in range(num_student_notifs):
                 notif_type, title, content, location = random.choice(test_notification_templates)
                 
-                # Schedule in the past few days or upcoming
-                days_offset = random.randint(-5, 3)
-                scheduled = base_date + timedelta(days=days_offset)
-                visible = scheduled - timedelta(days=random.randint(0, 1))
-                created = visible - timedelta(days=random.randint(1, 2))
+                # Generate notice message based on notification type
+                notice_message = random.choice(notice_messages.get(notif_type, ['']))
+                
+                # Schedule across 2 years past to 1 week future with varied times
+                days_offset = random.randint(-731, 7)  # 2 years ago to 1 week future
+                hours_offset = random.randint(0, 23)   # Random hour 0-23
+                minutes_offset = random.randint(0, 59) # Random minute 0-59
+                
+                # Create scheduled time with varied hours and minutes
+                scheduled = base_date + timedelta(days=days_offset, hours=hours_offset, minutes=minutes_offset)
+                
+                # Visible time: 0-2 days before scheduled, also with random time
+                visible_days_before = random.randint(0, 2)
+                visible_hours = random.randint(0, 23)
+                visible_minutes = random.randint(0, 59)
+                visible = scheduled - timedelta(days=visible_days_before, hours=visible_hours, minutes=visible_minutes)
+                
+                # Created time: 1-5 days before visible, also with random time
+                created_days_before = random.randint(1, 5)
+                created_hours = random.randint(0, 23)
+                created_minutes = random.randint(0, 59)
+                created = visible - timedelta(days=created_days_before, hours=created_hours, minutes=created_minutes)
                 
                 status = 'sent' if scheduled < base_date else 'pending'
                 is_read = 0
@@ -100,11 +151,16 @@ def create_notifications(self):
                 
                 updated = None
                 if random.random() < 0.2:
-                    updated = (created + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+                    updated_hours = random.randint(0, 23)
+                    updated_minutes = random.randint(0, 59)
+                    updated = (created + timedelta(days=1, hours=updated_hours, minutes=updated_minutes)).strftime('%Y-%m-%d %H:%M:%S')
                 
                 event_start = None
                 if notif_type == 'event':
-                    event_start = (scheduled + timedelta(days=random.randint(1, 14))).strftime('%Y-%m-%d')
+                    event_days = random.randint(1, 14)
+                    event_hours = random.randint(8, 20)  # Events usually during business hours
+                    event_minutes = random.choice([0, 15, 30, 45])  # Events usually start at quarter hours
+                    event_start = (scheduled + timedelta(days=event_days, hours=event_hours, minutes=event_minutes)).strftime('%Y-%m-%d %H:%M:%S')
                 
                 schedule_id = self.generate_uuid()
                 
@@ -114,8 +170,9 @@ def create_notifications(self):
                     notif_type,
                     title,
                     content,
-                    scheduled.strftime('%Y-%m-%d'),
-                    visible.strftime('%Y-%m-%d'),
+                    notice_message,
+                    scheduled.strftime('%Y-%m-%d %H:%M:%S'),
+                    visible.strftime('%Y-%m-%d %H:%M:%S'),
                     is_read,
                     'student',  # target_type - direct to student
                     test_student_id,  # target_id (specific student)
@@ -137,7 +194,7 @@ def create_notifications(self):
                     'visible_from': visible
                 })
             
-            self.add_statement(f"-- Added {num_student_notifs} special notifications for test student (student.test@edu.vn) with target_type='student'")
+            self.add_statement(f"-- Added {num_student_notifs} special notifications (4x increase) for test student (student.test@edu.vn) with target_type='student'")
     
     # Get test instructor account
     test_instructor_account = self.data.get('fixed_accounts', {}).get('instructor')
@@ -145,16 +202,33 @@ def create_notifications(self):
         test_instructor_id = test_instructor_account.get('instructor_id')
         
         if test_instructor_id:
-            # Create 20 notifications specifically for test instructor
-            num_instructor_notifs = 20
+            # Create 4x more notifications specifically for test instructor (80 total)
+            num_instructor_notifs = 80
             for i in range(num_instructor_notifs):
                 notif_type, title, content, location = random.choice(test_notification_templates)
                 
-                # Schedule in the past few days or upcoming
-                days_offset = random.randint(-5, 3)
-                scheduled = base_date + timedelta(days=days_offset)
-                visible = scheduled - timedelta(days=random.randint(0, 1))
-                created = visible - timedelta(days=random.randint(1, 2))
+                # Generate notice message based on notification type
+                notice_message = random.choice(notice_messages.get(notif_type, ['']))
+                
+                # Schedule across 2 years past to 1 week future with varied times
+                days_offset = random.randint(-731, 7)  # 2 years ago to 1 week future
+                hours_offset = random.randint(0, 23)   # Random hour 0-23
+                minutes_offset = random.randint(0, 59) # Random minute 0-59
+                
+                # Create scheduled time with varied hours and minutes
+                scheduled = base_date + timedelta(days=days_offset, hours=hours_offset, minutes=minutes_offset)
+                
+                # Visible time: 0-2 days before scheduled, also with random time
+                visible_days_before = random.randint(0, 2)
+                visible_hours = random.randint(0, 23)
+                visible_minutes = random.randint(0, 59)
+                visible = scheduled - timedelta(days=visible_days_before, hours=visible_hours, minutes=visible_minutes)
+                
+                # Created time: 1-5 days before visible, also with random time
+                created_days_before = random.randint(1, 5)
+                created_hours = random.randint(0, 23)
+                created_minutes = random.randint(0, 59)
+                created = visible - timedelta(days=created_days_before, hours=created_hours, minutes=created_minutes)
                 
                 status = 'sent' if scheduled < base_date else 'pending'
                 is_read = 0
@@ -163,11 +237,16 @@ def create_notifications(self):
                 
                 updated = None
                 if random.random() < 0.2:
-                    updated = (created + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+                    updated_hours = random.randint(0, 23)
+                    updated_minutes = random.randint(0, 59)
+                    updated = (created + timedelta(days=1, hours=updated_hours, minutes=updated_minutes)).strftime('%Y-%m-%d %H:%M:%S')
                 
                 event_start = None
                 if notif_type == 'event':
-                    event_start = (scheduled + timedelta(days=random.randint(1, 14))).strftime('%Y-%m-%d')
+                    event_days = random.randint(1, 14)
+                    event_hours = random.randint(8, 20)  # Events usually during business hours
+                    event_minutes = random.choice([0, 15, 30, 45])  # Events usually start at quarter hours
+                    event_start = (scheduled + timedelta(days=event_days, hours=event_hours, minutes=event_minutes)).strftime('%Y-%m-%d %H:%M:%S')
                 
                 schedule_id = self.generate_uuid()
                 
@@ -177,8 +256,9 @@ def create_notifications(self):
                     notif_type,
                     title,
                     content,
-                    scheduled.strftime('%Y-%m-%d'),
-                    visible.strftime('%Y-%m-%d'),
+                    notice_message,
+                    scheduled.strftime('%Y-%m-%d %H:%M:%S'),
+                    visible.strftime('%Y-%m-%d %H:%M:%S'),
                     is_read,
                     'instructor',  # target_type
                     test_instructor_id,  # target_id (specific instructor)
@@ -200,7 +280,7 @@ def create_notifications(self):
                     'visible_from': visible
                 })
             
-            self.add_statement(f"-- Added {num_instructor_notifs} special notifications for test instructor (instructor.test@edu.vn) with target_type='instructor'")
+            self.add_statement(f"-- Added {num_instructor_notifs} special notifications (4x increase) for test instructor (instructor.test@edu.vn) with target_type='instructor'")
     
     # Simple notification templates
     titles = [
@@ -235,17 +315,34 @@ def create_notifications(self):
         ('instructor', 'instructor_id', 0.05), # 5% - Specific instructor
     ]
     
-    # Generate 40-60 notifications total
-    num_notifications = 200
+    # Generate 4x more notifications (800 total) spread across past 2 years to 1 week in future
+    num_notifications = 800
     
     for i in range(num_notifications):
         notif_type, title, content, location = random.choice(titles)
         
-        # Random timing
-        days_offset = random.randint(-10, 7)
-        scheduled = base_date + timedelta(days=days_offset)
-        visible = scheduled - timedelta(days=random.randint(1, 2))
-        created = visible - timedelta(days=random.randint(1, 5))
+        # Generate notice message based on notification type
+        notice_message = random.choice(notice_messages.get(notif_type, ['']))
+        
+        # Random timing spread across 2 years past to 1 week future (731 + 7 = 738 days range)
+        days_offset = random.randint(-731, 7)  # 2 years ago to 1 week future
+        hours_offset = random.randint(0, 23)   # Random hour 0-23
+        minutes_offset = random.randint(0, 59) # Random minute 0-59
+        
+        # Create scheduled time with varied hours and minutes
+        scheduled = base_date + timedelta(days=days_offset, hours=hours_offset, minutes=minutes_offset)
+        
+        # Visible time: 0-2 days before scheduled, also with random time
+        visible_days_before = random.randint(0, 2)
+        visible_hours = random.randint(0, 23)
+        visible_minutes = random.randint(0, 59)
+        visible = scheduled - timedelta(days=visible_days_before, hours=visible_hours, minutes=visible_minutes)
+        
+        # Created time: 1-5 days before visible, also with random time
+        created_days_before = random.randint(1, 5)
+        created_hours = random.randint(0, 23)
+        created_minutes = random.randint(0, 59)
+        created = visible - timedelta(days=created_days_before, hours=created_hours, minutes=created_minutes)
         
         # Status
         status = 'sent' if scheduled < base_date else 'pending'
@@ -259,15 +356,21 @@ def create_notifications(self):
         is_deleted = 1 if random.random() > 0.97 else 0
         is_active = 0 if is_deleted else 1
         
-        # Updated timestamp
+        # Updated timestamp with random time
         updated = None
         if random.random() < 0.3:
-            updated = (created + timedelta(days=random.randint(1, 3))).strftime('%Y-%m-%d %H:%M:%S')
+            updated_days = random.randint(1, 3)
+            updated_hours = random.randint(0, 23)
+            updated_minutes = random.randint(0, 59)
+            updated = (created + timedelta(days=updated_days, hours=updated_hours, minutes=updated_minutes)).strftime('%Y-%m-%d %H:%M:%S')
         
-        # Event fields
+        # Event fields with random time
         event_start = None
         if notif_type == 'event':
-            event_start = (scheduled + timedelta(days=random.randint(1, 21))).strftime('%Y-%m-%d')
+            event_days = random.randint(1, 21)
+            event_hours = random.randint(8, 20)  # Events usually during business hours
+            event_minutes = random.choice([0, 15, 30, 45])  # Events usually start at quarter hours
+            event_start = (scheduled + timedelta(days=event_days, hours=event_hours, minutes=event_minutes)).strftime('%Y-%m-%d %H:%M:%S')
         
         # Randomly select target type based on weights
         rand_val = random.random()
@@ -295,8 +398,9 @@ def create_notifications(self):
             notif_type,
             title,
             content,
-            scheduled.strftime('%Y-%m-%d'),
-            visible.strftime('%Y-%m-%d'),
+            notice_message,
+            scheduled.strftime('%Y-%m-%d %H:%M:%S'),
+            visible.strftime('%Y-%m-%d %H:%M:%S'),
             is_read,
             target_type,
             target_id,
@@ -321,7 +425,7 @@ def create_notifications(self):
     self.add_statement(f"-- Generated {len(notification_rows)} notifications")
     
     self.bulk_insert('notification_schedule',
-                    ['schedule_id', 'notification_type', 'title', 'content',
+                    ['schedule_id', 'notification_type', 'title', 'content', 'notice_message',
                      'scheduled_date', 'visible_from', 'is_read', 'target_type',
                      'target_id', 'created_by_user', 'status', 'event_location',
                      'event_start_date', 'created_at', 'updated_at', 'is_deleted',
@@ -364,9 +468,11 @@ def create_notification_user_read(self):
         selected_notifications = random.sample(self.data['notifications'], num_to_read)
         
         for notif in selected_notifications:
-            # Random read_at time (within last 30 days)
+            # Random read_at time (within last 30 days) with varied hours and minutes
             days_ago = random.randint(0, 30)
-            read_at = base_date - timedelta(days=days_ago, hours=random.randint(0, 23))
+            hours_ago = random.randint(0, 23)
+            minutes_ago = random.randint(0, 59)
+            read_at = base_date - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)
             
             read_rows.append([
                 self.generate_uuid(),
@@ -386,9 +492,19 @@ def create_documents(self):
     """
     Generate document records for course materials
     Associates documents with course_classes and instructors
+    Now supports both file_title and file_name columns:
+    - file_title: Uses the description as the display title
+    - file_name: File name with extension truncated
     """
     self.add_statement("\n-- ==================== COURSE DOCUMENTS ====================")
     self.add_statement("-- Generating course material documents (PDFs, images, Excel files)")
+    self.add_statement("-- UPDATED: Now supports file_title (description) and file_name (without extension)")
+    self.add_statement("-- FIXED: Upload dates now properly constrained within course class dates (not semester dates)")
+    self.add_statement("-- IMPROVED: Upload dates vary throughout course class duration with realistic timing:")
+    self.add_statement("--   - Tài liệu, Slide: Early in course class (first 30%)")
+    self.add_statement("--   - Bài LAB: Mid-late in course class (40%-90%)")
+    self.add_statement("--   - Bài tập: Throughout course class (10%-90%)")
+    self.add_statement("--   - Hours: Business hours (8 AM-6 PM) + some evening uploads")
     
     document_rows = []
     
@@ -459,6 +575,10 @@ def create_documents(self):
     for course_class in self.data['course_classes']:
         num_docs = random.randint(2, 5)
         
+        # FIXED: Get actual course class dates (not semester dates) for realistic document upload timing
+        course_start = course_class.get('course_class_start')
+        course_end = course_class.get('course_class_end')
+        
         for i in range(num_docs):
             document_id = self.generate_uuid()
             
@@ -501,23 +621,78 @@ def create_documents(self):
             # Uploaded by instructor
             uploaded_by = course_class.get('instructor_id')
             
+            # Generate varied upload dates throughout the semester
+            upload_date = None
+            if course_start and course_end:
+                # Convert string dates to datetime objects if needed
+                if isinstance(course_start, str):
+                    from datetime import datetime as dt
+                    course_start = dt.strptime(course_start, '%Y-%m-%d').date()
+                if isinstance(course_end, str):
+                    from datetime import datetime as dt
+                    course_end = dt.strptime(course_end, '%Y-%m-%d').date()
+                
+                # Generate random date within semester with varied hours/minutes
+                total_days = (course_end - course_start).days
+                if total_days > 0:
+                    # Document type influences upload timing within course class duration:
+                    # - Tài liệu, Slide: Early in course class (first 30%)
+                    # - Bài tập: Throughout course class (10%-90%)
+                    # - Bài LAB: Mid to late course class (40%-90%)
+                    if document_type in ['Tài liệu', 'Slide']:
+                        # Upload early (first 30% of course class duration)
+                        random_days = random.randint(1, max(1, int(total_days * 0.3)))
+                    elif document_type == 'Bài LAB':
+                        # Upload mid to late (40%-90% of course class duration)
+                        random_days = random.randint(int(total_days * 0.4), max(1, int(total_days * 0.9)))
+                    else:  # Bài tập
+                        # Upload throughout course class (10%-90%)
+                        random_days = random.randint(int(total_days * 0.1), max(1, int(total_days * 0.9)))
+                    
+                    # Random hour during business hours (8 AM - 6 PM) with some after hours
+                    hour = random.choice([8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] + 
+                                       [19, 20, 21] * 2)  # Some evening uploads
+                    minute = random.choice([0, 15, 30, 45, random.randint(0, 59)])  # Mix of on-the-hour and random
+                    
+                    upload_date = datetime.combine(
+                        course_start + timedelta(days=random_days),
+                        datetime.min.time().replace(hour=hour, minute=minute)
+                    )
+            
+            # Fallback to random date if course dates not available
+            if not upload_date:
+                # Random date within last year
+                days_ago = random.randint(30, 365)
+                hour = random.randint(8, 21)
+                minute = random.randint(0, 59)
+                upload_date = datetime.now() - timedelta(days=days_ago)
+                upload_date = upload_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
+            # Generate file_title (use description as the title)
+            file_title = description
+            
+            # Generate file_name by truncating extension from original filename
+            file_name_without_ext = file_name.rsplit('.', 1)[0] if '.' in file_name else file_name
+            
             document_rows.append([
                 document_id,
                 course_class['course_class_id'],
-                file_name,
+                file_title,
+                file_name_without_ext,
                 document_type,
                 file_path,
                 file_type,
                 file_size,
                 uploaded_by,
-                description
+                description,
+                upload_date.strftime('%Y-%m-%d %H:%M:%S')  # Add created_at timestamp
             ])
     
     self.add_statement(f"-- Total documents generated: {len(document_rows)}")
     
     self.bulk_insert('document',
-                    ['document_id', 'course_class_id', 'file_name', 'document_type',
-                     'file_path', 'file_type', 'file_size', 'uploaded_by', 'description'],
+                    ['document_id', 'course_class_id', 'file_title', 'file_name', 'document_type',
+                     'file_path', 'file_type', 'file_size', 'uploaded_by', 'description', 'created_at'],
                     document_rows)
 
 def create_regulations(self):

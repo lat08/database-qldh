@@ -10,14 +10,19 @@ skinparam class {
 }
 
 ' Level 0 tables
+class chat_history {
+  message_id
+  user_id
+  role
+  message
+  session_id
+}
 class curriculum_detail {
   curriculum_detail_id
   curriculum_id
   subject_id
   academic_year_index
   semester_index
-  subject_type
-  minimum_passing_grade
 }
 class department {
   department_id
@@ -25,9 +30,17 @@ class department {
   department_code
   faculty_id
 }
+class division {
+  division_id
+  division_name
+  division_code
+  division_status
+  dean_id
+}
 class document {
   document_id
   course_class_id
+  file_title
   file_name
   document_type
   file_path
@@ -35,6 +48,23 @@ class document {
   file_size
   uploaded_by
   description
+}
+class enrollment_draft_grade {
+  draft_grade_id
+  enrollment_id
+  attendance_grade_draft
+  midterm_grade_draft
+  final_grade_draft
+  grade_note
+}
+class enrollment_grade_detail {
+  grade_detail_id
+  grade_version_id
+  enrollment_id
+  attendance_grade
+  midterm_grade
+  final_grade
+  grade_note
 }
 class exam_class {
   exam_class_id
@@ -67,27 +97,28 @@ class faculty {
   faculty_code
   dean_id
   faculty_status
+  division_id
+}
+class knowledge_documents {
+  id
+  title
+  content
+  content_summary
+  document_type
+  role_type
+  embedding_reference
+  metadata
 }
 class note {
   note_id
-  user_id
+  student_id
   content
-  note_type
 }
-class notification_schedule {
+class notification_user_read {
+  notification_user_read_id
   schedule_id
-  notification_type
-  title
-  content
-  scheduled_date
-  visible_from
-  is_read
-  target_type
-  target_id
-  created_by_user
-  status
-  event_location
-  event_start_date
+  user_id
+  read_at
 }
 class payment_enrollment_detail {
   payment_enrollment_detail_ID
@@ -156,6 +187,23 @@ class schedule_change {
   start_period
   end_period
   reason
+  report_file_url
+}
+class schedule_change_request {
+  schedule_change_request_id
+  course_class_id
+  cancelled_week
+  makeup_week
+  makeup_date
+  makeup_room_id
+  day_of_week
+  start_period
+  end_period
+  reason
+  status
+  reviewed_at
+  reviewed_by
+  review_note
 }
 class student_verification_request {
   verification_request_id
@@ -201,12 +249,17 @@ class user_refresh_token {
 }
 
 ' Level 1 tables
-class admin {
-  admin_id
-  person_id
-  admin_code
-  position
-  admin_status
+class enrollment_grade_version {
+  grade_version_id
+  course_class_id
+  version_number
+  version_status
+  submitted_by
+  submitted_at
+  submission_note
+  approved_by
+  approved_at
+  approval_note
 }
 class exam {
   exam_id
@@ -216,6 +269,22 @@ class exam {
   notes
   num_exam_codes_needed
   exam_status
+}
+class notification_schedule {
+  schedule_id
+  notification_type
+  title
+  content
+  notice_message
+  scheduled_date
+  visible_from
+  is_read
+  target_type
+  target_id
+  created_by_user
+  status
+  event_location
+  event_start_date
 }
 class payment_enrollment {
   payment_id
@@ -243,9 +312,6 @@ class student_enrollment {
   enrollment_status
   cancellation_date
   cancellation_reason
-  attendance_grade
-  midterm_grade
-  final_grade
 }
 class student_health_insurance {
   insurance_id
@@ -265,6 +331,42 @@ class theme_configurations {
   scope_target
   theme_variables
 }
+
+' Level 2 tables
+class admin {
+  admin_id
+  person_id
+  admin_code
+  position
+  admin_status
+}
+class course_class {
+  course_class_id
+  course_id
+  instructor_id
+  room_id
+  course_class_code
+  date_start
+  date_end
+  max_students
+  day_of_week
+  start_period
+  end_period
+  course_class_status
+  grade_submission_status
+  grade_submitted_at
+  grade_approved_at
+  grade_approved_by
+  grade_submission_note
+  grade_approval_note
+}
+class student {
+  student_id
+  person_id
+  student_code
+  class_id
+  enrollment_status
+}
 class user_account {
   user_id
   person_id
@@ -279,33 +381,6 @@ class user_account {
   last_login_time
 }
 
-' Level 2 tables
-class course_class {
-  course_class_id
-  course_id
-  instructor_id
-  room_id
-  date_start
-  date_end
-  max_students
-  day_of_week
-  start_period
-  end_period
-  course_class_status
-}
-class role {
-  role_id
-  role_name
-  description
-}
-class student {
-  student_id
-  person_id
-  student_code
-  class_id
-  enrollment_status
-}
-
 ' Level 3 tables
 class class {
   class_id
@@ -316,16 +391,22 @@ class class {
   training_system_id
   start_academic_year_id
   end_academic_year_id
-  curriculum_id
   curriculum_desc_pdf
   class_status
+  curriculum_id
 }
 class course {
   course_id
   subject_id
   semester_id
+  course_code
   fee_per_credit
   course_status
+}
+class role {
+  role_id
+  role_name
+  description
 }
 class room {
   room_id
@@ -350,11 +431,9 @@ class curriculum {
   curriculum_id
   curriculum_code
   curriculum_name
-  faculty_id
-  total_credits
+  department_id
   applied_year
   version_number
-  curriculum_status
 }
 class instructor {
   instructor_id
@@ -408,17 +487,21 @@ role <-- role_permission
 permission <-- role_permission
 person <-- user_account
 role <-- user_account
-user_account <-- note
+person <-- admin
 user_account <-- user_otp
 user_account <-- user_refresh_token
 building <-- room
 room <-- room_amenity_mapping
 room_amenity <-- room_amenity_mapping
 academic_year <-- semester
+division <-- faculty
 faculty <-- department
 person <-- instructor
 faculty <-- instructor
 department <-- subject
+department <-- curriculum
+curriculum <-- curriculum_detail
+subject <-- curriculum_detail
 department <-- class
 instructor <-- class
 training_system <-- class
@@ -426,10 +509,6 @@ academic_year <-- class
 curriculum <-- class
 person <-- student
 class <-- student
-person <-- admin
-faculty <-- curriculum
-curriculum <-- curriculum_detail
-subject <-- curriculum_detail
 subject <-- course
 semester <-- course
 course <-- course_class
@@ -437,6 +516,12 @@ instructor <-- course_class
 room <-- course_class
 student <-- student_enrollment
 course_class <-- student_enrollment
+student_enrollment <-- enrollment_draft_grade
+course_class <-- enrollment_grade_version
+instructor <-- enrollment_grade_version
+admin <-- enrollment_grade_version
+enrollment_grade_version <-- enrollment_grade_detail
+student_enrollment <-- enrollment_grade_detail
 course_class <-- schedule_change
 room <-- schedule_change
 course_class <-- document
@@ -464,5 +549,7 @@ student <-- student_verification_request
 student <-- payment_postponement_request
 semester <-- payment_postponement_request
 admin <-- payment_postponement_request
+notification_schedule <-- notification_user_read
+user_account <-- notification_user_read
 theme_configurations <-- theme_history
 @enduml

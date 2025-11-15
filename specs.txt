@@ -355,6 +355,7 @@ Giáo dục quốc phòng | MIL101 | 3 | 30 | 15
 
 # Computer Science Department
 Khoa học máy tính | Nhập môn lập trình | CS101 | 4 | 30 | 30
+Khoa học máy tính | Cơ sở lập trình | CSLT | 4 | 30 | 30
 Khoa học máy tính | Cấu trúc dữ liệu và giải thuật | CS201 | 4 | 30 | 30
 Khoa học máy tính | Lập trình hướng đối tượng | CS202 | 4 | 30 | 30
 Khoa học máy tính | Hệ điều hành | CS203 | 3 | 30 | 15

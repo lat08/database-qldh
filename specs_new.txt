@@ -1,0 +1,681 @@
+# EduManagement Database Specification
+# Clean, human-readable configuration for data generation
+# Lines starting with # are comments
+
+# ============================================================
+# FIXED TEST ACCOUNTS - Password Configuration
+# ============================================================
+[test_accounts]
+password: 123456
+salt_base64: MTExMQ==
+
+# ============================================================
+# FIXED STUDENT ACCOUNT
+# ============================================================
+[test_student]
+person_id: 00000000-0000-0000-0000-000000000001
+user_id: 00000000-0000-0000-0000-000000000002
+student_id: 00000000-0000-0000-0000-000000000003
+username: STUDENT
+email: student.test@edu.vn
+full_name: Nguyễn Văn Test Student
+student_code: SV999999
+gender: male
+date_of_birth: 2005-01-15
+phone_number: 0901234567
+citizen_id: 001234567890
+address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
+class_year: 2023
+
+[test_student2]
+person_id: 00000000-0000-0000-0000-000000000999
+user_id: 00000000-0000-0000-0000-000000000999
+student_id: 00000000-0000-0000-0000-000000000999
+username: THIEN
+email: tiensi.thien2005@gmail.com
+full_name: Phan Điền Mạnh Thiên
+student_code: SV001
+gender: male
+date_of_birth: 2005-01-15
+phone_number: 0901234999
+citizen_id: 000901234999
+address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
+class_year: 2023
+
+[test_student3]
+person_id: 00000000-0000-0000-0001-000000000999
+user_id: 00000000-0000-0000-0001-000000000999
+student_id: 00000000-0000-0000-0001-000000000999
+username: THAITUAN
+email: phanthanhthaituan452005@gmail.com
+full_name: Phan Thanh Thái Tuấn
+student_code: SV007
+gender: male
+date_of_birth: 2005-01-15
+phone_number: 0901239999
+citizen_id: 000901239999
+address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
+class_year: 2023
+
+
+[test_student4]
+person_id: 00000000-0000-0000-0002-000000000999
+user_id: 00000000-0000-0000-0002-000000000999
+student_id: 00000000-0000-0000-0002-000000000999
+username: TUANDAT
+email: letandat1709@gmail.com
+full_name: Lê Tấn Đạt
+student_code: SV008
+gender: male
+date_of_birth: 2005-01-15
+phone_number: 0901249999
+citizen_id: 000901249999
+address: 123 Đường ABC, Quận 1, TP Hồ Chí Minh
+class_year: 2023
+
+
+# ============================================================
+# FIXED INSTRUCTOR ACCOUNT
+# ============================================================
+[test_instructor]
+person_id: 00000000-0000-0000-0000-000000000011
+user_id: 00000000-0000-0000-0000-000000000012
+instructor_id: 00000000-0000-0000-0000-000000000013
+username: INSTRUCTOR
+email: instructor.test@edu.vn
+full_name: Trần Thị Test Instructor
+instructor_code: GV9999
+gender: female
+date_of_birth: 1985-03-20
+phone_number: 0907654321
+citizen_id: 009876543210
+address: 456 Đường XYZ, Quận 3, TP Hồ Chí Minh
+degree: PhD
+specialization: Computer Science
+hire_date: 2015-09-01
+
+# ============================================================
+# FIXED ADMIN ACCOUNTS
+# ============================================================
+[test_admin_principal]
+person_id: 00000000-0000-0000-0000-000000000021
+user_id: 00000000-0000-0000-0000-000000000022
+admin_id: 00000000-0000-0000-0000-000000000023
+username: PRINCIPAL
+email: principal.test@edu.vn
+full_name: Lê Minh Test Principal
+admin_code: AD0001
+gender: male
+date_of_birth: 1975-01-10
+phone_number: 0909111111
+citizen_id: 001111111111
+address: 789 Đường DEF, Quận 5, TP Hồ Chí Minh
+position: Hiệu trưởng
+
+[test_admin]
+person_id: 00000000-0000-0000-0000-000000009999
+user_id: 00000000-0000-0000-0000-000000009999
+admin_id: 00000000-0000-0000-0000-000000009999
+username: ADMIN
+email: admin.test@edu.vn
+full_name: Rick Astley
+admin_code: AD9999
+gender: male
+date_of_birth: 1975-01-10
+phone_number: 0909119999
+citizen_id: 001111119999
+address: 789 Đường DEF, Quận 5, TP Hồ Chí Minh
+position: Admin
+
+[test_admin_accountant]
+person_id: 00000000-0000-0000-0000-000000000031
+user_id: 00000000-0000-0000-0000-000000000032
+admin_id: 00000000-0000-0000-0000-000000000033
+username: ACCOUNTANT
+email: accountant.test@edu.vn
+full_name: Phạm Thị Test Accountant
+admin_code: AD0002
+gender: female
+date_of_birth: 1980-05-15
+phone_number: 0909222222
+citizen_id: 002222222222
+address: 321 Đường GHI, Quận 10, TP Hồ Chí Minh
+position: Kế toán trưởng
+
+[test_admin_academic]
+person_id: 00000000-0000-0000-0000-000000000041
+user_id: 00000000-0000-0000-0000-000000000042
+admin_id: 00000000-0000-0000-0000-000000000043
+username: ACADEMIC
+email: academic.test@edu.vn
+full_name: Trương Văn Test Academic
+admin_code: AD0003
+gender: male
+date_of_birth: 1978-08-20
+phone_number: 0909333333
+citizen_id: 003333333333
+address: 654 Đường JKL, Quận Bình Thạnh, TP Hồ Chí Minh
+position: Trưởng phòng Đào tạo
+
+[test_admin_hr]
+person_id: 00000000-0000-0000-0000-000000000051
+user_id: 00000000-0000-0000-0000-000000000052
+admin_id: 00000000-0000-0000-0000-000000000053
+username: HR
+email: hr.test@edu.vn
+full_name: Hoàng Thị Test HR
+admin_code: AD0004
+gender: female
+date_of_birth: 1982-11-25
+phone_number: 0909444444
+citizen_id: 004444444444
+address: 987 Đường MNO, Quận Tân Bình, TP Hồ Chí Minh
+position: Trưởng phòng Nhân sự
+
+[test_admin_facilities]
+person_id: 00000000-0000-0000-0000-000000000061
+user_id: 00000000-0000-0000-0000-000000000062
+admin_id: 00000000-0000-0000-0000-000000000063
+username: FACILITIES
+email: facilities.test@edu.vn
+full_name: Vũ Văn Test Facilities
+admin_code: AD0005
+gender: male
+date_of_birth: 1979-03-30
+phone_number: 0909555555
+citizen_id: 005555555555
+address: 147 Đường PQR, Quận Phú Nhuận, TP Hồ Chí Minh
+position: Trưởng phòng Cơ sở vật chất
+
+# ============================================================
+# ROLES DEFINITION
+# ============================================================
+[roles]
+# Format: RoleName | Description
+
+Student | Sinh viên
+Instructor | Giảng viên
+Admin | Admin chung (Toàn quyền)
+Admin_Principal | Hiệu trưởng (Toàn quyền)
+Admin_Accountant | Kế toán (Học phí, báo cáo tài chính)
+Admin_Academic | Quản lý đào tạo (Môn học, chương trình đào tạo, khóa học, kỳ thi)
+Admin_HR | Nhân sự (Hồ sơ sinh viên, giảng viên)
+Admin_Facilities | Quản lý cơ sở vật chất (Phòng học, trang thiết bị)
+
+# ============================================================
+# PERMISSIONS DEFINITION
+# ============================================================
+[permissions]
+# Format: PermissionName | Description
+
+# Authentication
+login_system | Đăng nhập hệ thống
+
+# Student permissions
+register_courses | Đăng ký môn học
+view_own_grades | Xem điểm của bản thân
+pay_tuition | Thanh toán học phí
+view_own_schedule | Xem lịch học của bản thân
+view_course_materials | Xem tài liệu học tập
+request_documents | Yêu cầu giấy tờ xác nhận
+
+# Instructor permissions
+input_grades | Nhập điểm sinh viên
+view_student_list | Xem danh sách sinh viên
+view_teaching_schedule | Xem lịch giảng dạy
+upload_course_materials | Upload tài liệu học tập
+submit_exam | Nộp đề thi
+manage_attendance | Quản lý điểm danh
+receive_payment | Nhận thanh toán (lương, thù lao)
+
+# Principal permissions (All permissions)
+full_system_access | Toàn quyền truy cập hệ thống
+view_all_reports | Xem mọi báo cáo
+manage_all_users | Quản lý mọi người dùng
+approve_all_requests | Phê duyệt mọi yêu cầu
+
+# Accountant permissions
+view_tuition_fees | Xem học phí
+manage_tuition_fees | Quản lý học phí
+view_financial_reports | Xem báo cáo tài chính
+manage_payments | Quản lý thanh toán
+approve_tuition_postponement | Phê duyệt hoãn học phí
+manage_scholarships | Quản lý học bổng
+export_financial_data | Xuất dữ liệu tài chính
+
+# Academic permissions
+manage_subjects | Quản lý môn học
+manage_curriculum | Quản lý chương trình đào tạo
+manage_courses | Quản lý khóa học
+manage_semesters | Quản lý học kỳ
+manage_exams | Quản lý kỳ thi
+approve_exam_submissions | Phê duyệt đề thi
+manage_class_schedule | Quản lý lịch học
+assign_instructors | Phân công giảng viên
+view_academic_reports | Xem báo cáo đào tạo
+
+# HR permissions
+view_student_profiles | Xem hồ sơ sinh viên
+edit_student_profiles | Sửa hồ sơ sinh viên
+delete_student_profiles | Xóa hồ sơ sinh viên
+view_instructor_profiles | Xem hồ sơ giảng viên
+edit_instructor_profiles | Sửa hồ sơ giảng viên
+delete_instructor_profiles | Xóa hồ sơ giảng viên
+manage_user_accounts | Quản lý tài khoản người dùng
+view_hr_reports | Xem báo cáo nhân sự
+
+# Facilities permissions
+manage_buildings | Quản lý tòa nhà
+manage_rooms | Quản lý phòng học
+manage_room_amenities | Quản lý trang thiết bị
+approve_room_bookings | Phê duyệt đặt phòng
+view_facilities_reports | Xem báo cáo cơ sở vật chất
+manage_maintenance | Quản lý bảo trì
+
+# ============================================================
+# ROLE PERMISSIONS MAPPING
+# ============================================================
+[role_permissions]
+# Format: RoleName | Permission1, Permission2, Permission3, ...
+
+Student | login_system, register_courses, view_own_grades, pay_tuition, view_own_schedule, view_course_materials, request_documents
+
+Instructor | login_system, input_grades, view_student_list, view_teaching_schedule, upload_course_materials, submit_exam, manage_attendance, receive_payment
+
+Admin_Principal | full_system_access, view_all_reports, manage_all_users, approve_all_requests, login_system, view_tuition_fees, manage_tuition_fees, view_financial_reports, manage_payments, approve_tuition_postponement, manage_scholarships, export_financial_data, manage_subjects, manage_curriculum, manage_courses, manage_semesters, manage_exams, approve_exam_submissions, manage_class_schedule, assign_instructors, view_academic_reports, view_student_profiles, edit_student_profiles, delete_student_profiles, view_instructor_profiles, edit_instructor_profiles, delete_instructor_profiles, manage_user_accounts, view_hr_reports, manage_buildings, manage_rooms, manage_room_amenities, approve_room_bookings, view_facilities_reports, manage_maintenance
+
+Admin_Accountant | login_system, view_tuition_fees, manage_tuition_fees, view_financial_reports, manage_payments, approve_tuition_postponement, manage_scholarships, export_financial_data
+
+Admin_Academic | login_system, manage_subjects, manage_curriculum, manage_courses, manage_semesters, manage_exams, approve_exam_submissions, manage_class_schedule, assign_instructors, view_academic_reports
+
+Admin_HR | login_system, view_student_profiles, edit_student_profiles, delete_student_profiles, view_instructor_profiles, edit_instructor_profiles, delete_instructor_profiles, manage_user_accounts, view_hr_reports
+
+Admin_Facilities | login_system, manage_buildings, manage_rooms, manage_room_amenities, approve_room_bookings, view_facilities_reports, manage_maintenance
+
+# ============================================================
+# ACADEMIC YEARS
+# ============================================================
+[academic_years]
+
+2021-2022: 2021-09-01 to 2022-08-31, active
+2022-2023: 2022-09-01 to 2023-08-31, active
+2023-2024: 2023-09-01 to 2024-08-31, active
+2024-2025: 2024-09-01 to 2025-08-31, active
+2025-2026: 2025-09-01 to 2026-08-31, active
+
+# ============================================================
+# SEMESTERS (auto-generated from academic years)
+# ============================================================
+# Format: fall (Sep-Dec), spring (Jan-May), summer (Jun-Aug)
+# Registration starts 30 days before, ends 7 days before
+
+# ============================================================
+# DIVISIONS
+# ============================================================
+[divisions]
+# Format: DivisionName | DivisionCode
+
+Khoa học và Công nghệ | KHCN
+Kinh tế và Quản trị | KTEQT
+Khoa học Xã hội và Nhân văn | KHXHNV
+Y học và Sức khỏe | YMSK
+Nghệ thuật và Thiết kế | NTTK
+
+# ============================================================
+# FACULTIES & DEPARTMENTS
+# ============================================================
+[faculties]
+# Format: FacultyName | FacultyCode | DivisionCode | Department1, Department2, ...
+
+Công nghệ thông tin | CNTT | KHCN | Khoa học máy tính, Hệ thống thông tin, Kỹ thuật phần mềm
+Kinh tế | KTE | KTEQT | Quản trị kinh doanh, Tài chính - Ngân hàng, Marketing
+Kỹ thuật | KT | KHCN | Cơ khí, Điện - Điện tử, Xây dựng
+Khoa học tự nhiên | KHTN | KHCN | Toán học, Vật lý, Hóa học
+Y dược | YD | YMSK | Y khoa, Dược học
+Văn học và Ngôn ngữ | VLNN | KHXHNV | Văn học Việt Nam, Ngôn ngữ Anh, Ngôn ngữ Trung
+Nghệ thuật | NT | NTTK | Thiết kế đồ họa, Âm nhạc, Kiến trúc
+
+# ============================================================
+# GENERAL SUBJECTS (Common to all students)
+# ============================================================
+[general_subjects]
+# Format: SubjectName | SubjectCode | Credits | TheoryHours | PracticeHours
+
+Triết học Mác - Lênin | TRHH101 | 3 | 30 | 15
+Kinh tế chính trị Mác - Lênin | KTCT102 | 2 | 20 | 10
+Chủ nghĩa xã hội khoa học | CNXH103 | 2 | 20 | 10
+Tư tưởng Hồ Chí Minh | TTHCM104 | 2 | 20 | 10
+Lịch sử Đảng Cộng sản Việt Nam | LSDCS105 | 2 | 20 | 10
+Pháp luật đại cương | PL101 | 2 | 30 | 0
+Văn hóa Việt Nam | VH101 | 2 | 20 | 10
+Tiếng Anh 1 | ENG101 | 3 | 30 | 15
+Tiếng Anh 2 | ENG102 | 3 | 30 | 15
+Tiếng Anh 3 | ENG103 | 3 | 30 | 15
+Tiếng Anh học thuật | ENG201 | 3 | 30 | 15
+Tin học đại cương | IT101 | 3 | 30 | 15
+Phương pháp nghiên cứu khoa học | PPNCKH101 | 2 | 20 | 10
+Kỹ năng mềm | KNM101 | 2 | 15 | 15
+Tâm lý học đại cương | TL101 | 2 | 20 | 10
+Giáo dục thể chất 1 | PE101 | 2 | 0 | 30
+Giáo dục thể chất 2 | PE102 | 2 | 0 | 30
+Giáo dục thể chất 3 | PE103 | 1 | 0 | 15
+Giáo dục quốc phòng | MIL101 | 3 | 30 | 15
+
+# ============================================================
+# SPECIALIZED SUBJECTS BY DEPARTMENT
+# ============================================================
+[department_subjects]
+# Format: DepartmentName | SubjectName | SubjectCode | Credits | TheoryHours | PracticeHours
+
+# Computer Science Department
+Khoa học máy tính | Nhập môn lập trình | CS101 | 4 | 30 | 30
+Khoa học máy tính | Cấu trúc dữ liệu và giải thuật | CS201 | 4 | 30 | 30
+Khoa học máy tính | Lập trình hướng đối tượng | CS202 | 4 | 30 | 30
+Khoa học máy tính | Hệ điều hành | CS203 | 3 | 30 | 15
+Khoa học máy tính | Cơ sở dữ liệu | CS204 | 3 | 30 | 15
+Khoa học máy tính | Mạng máy tính | CS301 | 3 | 30 | 15
+Khoa học máy tính | Trí tuệ nhân tạo | CS302 | 3 | 30 | 15
+Khoa học máy tính | Học máy | CS303 | 3 | 30 | 15
+Khoa học máy tính | Thị giác máy tính | CS401 | 3 | 30 | 15
+Khoa học máy tính | Xử lý ngôn ngữ tự nhiên | CS402 | 3 | 30 | 15
+
+# Information Systems
+Hệ thống thông tin | Phân tích thiết kế hệ thống | IS201 | 3 | 30 | 15
+Hệ thống thông tin | Quản trị dự án CNTT | IS202 | 3 | 30 | 15
+Hệ thống thông tin | An ninh mạng | IS301 | 3 | 30 | 15
+Hệ thống thông tin | Quản trị hệ thống | IS302 | 3 | 30 | 15
+Hệ thống thông tin | Kiến trúc doanh nghiệp | IS401 | 3 | 30 | 15
+
+# Software Engineering
+Kỹ thuật phần mềm | Công nghệ phần mềm | SE201 | 3 | 30 | 15
+Kỹ thuật phần mềm | Kiểm thử phần mềm | SE202 | 3 | 30 | 15
+Kỹ thuật phần mềm | Quản lý dự án phần mềm | SE301 | 3 | 30 | 15
+Kỹ thuật phần mềm | Phát triển ứng dụng web | SE302 | 4 | 30 | 30
+Kỹ thuật phần mềm | Phát triển ứng dụng di động | SE401 | 4 | 30 | 30
+
+# Business Administration
+Quản trị kinh doanh | Nguyên lý quản trị | BA101 | 3 | 30 | 15
+Quản trị kinh doanh | Quản trị marketing | BA201 | 3 | 30 | 15
+Quản trị kinh doanh | Quản trị nhân lực | BA202 | 3 | 30 | 15
+Quản trị kinh doanh | Quản trị tài chính | BA301 | 3 | 30 | 15
+Quản trị kinh doanh | Quản trị chiến lược | BA401 | 3 | 30 | 15
+
+# Finance & Banking
+Tài chính - Ngân hàng | Nguyên lý kế toán | FIN101 | 3 | 30 | 15
+Tài chính - Ngân hàng | Tài chính doanh nghiệp | FIN201 | 3 | 30 | 15
+Tài chính - Ngân hàng | Ngân hàng thương mại | FIN202 | 3 | 30 | 15
+Tài chính - Ngân hàng | Đầu tư chứng khoán | FIN301 | 3 | 30 | 15
+Tài chính - Ngân hàng | Quản trị rủi ro tài chính | FIN401 | 3 | 30 | 15
+
+# Marketing
+Marketing | Nguyên lý Marketing | MKT101 | 3 | 30 | 15
+Marketing | Nghiên cứu thị trường | MKT201 | 3 | 30 | 15
+Marketing | Marketing số | MKT301 | 3 | 30 | 15
+Marketing | Quản trị thương hiệu | MKT302 | 3 | 30 | 15
+Marketing | Marketing quốc tế | MKT401 | 3 | 30 | 15
+
+# Mechanical Engineering
+Cơ khí | Vẽ kỹ thuật cơ khí | ME101 | 3 | 15 | 30
+Cơ khí | Cơ học lý thuyết | ME201 | 4 | 45 | 15
+Cơ khí | Sức bền vật liệu | ME202 | 4 | 40 | 20
+Cơ khí | Thiết kế máy | ME301 | 3 | 30 | 15
+Cơ khí | Chế tạo máy | ME401 | 4 | 30 | 30
+
+# Electrical Engineering
+Điện - Điện tử | Mạch điện | EE101 | 3 | 30 | 15
+Điện - Điện tử | Điện tử số | EE201 | 3 | 30 | 15
+Điện - Điện tử | Vi điều khiển | EE301 | 3 | 30 | 15
+Điện - Điện tử | Hệ thống nhúng | EE302 | 4 | 30 | 30
+Điện - Điện tử | IoT và ứng dụng | EE401 | 3 | 30 | 15
+
+# Civil Engineering
+Xây dựng | Vẽ kỹ thuật xây dựng | CE101 | 3 | 15 | 30
+Xây dựng | Cơ học kết cấu | CE201 | 4 | 40 | 20
+Xây dựng | Vật liệu xây dựng | CE202 | 3 | 30 | 15
+Xây dựng | Thiết kế công trình | CE301 | 4 | 30 | 30
+Xây dựng | Quản lý dự án xây dựng | CE401 | 3 | 30 | 15
+
+# Mathematics
+Toán học | Giải tích 1 | MATH101 | 4 | 45 | 15
+Toán học | Giải tích 2 | MATH102 | 4 | 45 | 15
+Toán học | Đại số tuyến tính | MATH103 | 3 | 30 | 15
+Toán học | Xác suất thống kê | MATH201 | 3 | 30 | 15
+Toán học | Toán rời rạc | MATH202 | 3 | 30 | 15
+
+# Physics
+Vật lý | Vật lý đại cương 1 | PHY101 | 3 | 30 | 15
+Vật lý | Vật lý đại cương 2 | PHY102 | 3 | 30 | 15
+Vật lý | Cơ học lượng tử | PHY301 | 3 | 30 | 15
+Vật lý | Vật lý hạt nhân | PHY302 | 3 | 30 | 15
+
+# Chemistry
+Hóa học | Hóa đại cương | CHEM101 | 3 | 30 | 15
+Hóa học | Hóa hữu cơ | CHEM201 | 3 | 30 | 15
+Hóa học | Hóa phân tích | CHEM301 | 3 | 30 | 15
+
+# Medicine Department
+Y khoa | Giải phẫu học | MED101 | 4 | 45 | 30
+Y khoa | Sinh lý học | MED102 | 4 | 45 | 15
+Y khoa | Bệnh học | MED201 | 4 | 45 | 15
+Y khoa | Dược lý học | MED202 | 3 | 30 | 15
+Y khoa | Chẩn đoán hình ảnh | MED301 | 3 | 30 | 15
+Y khoa | Nội khoa | MED302 | 4 | 45 | 30
+Y khoa | Ngoại khoa | MED303 | 4 | 45 | 30
+Y khoa | Sản phụ khoa | MED401 | 3 | 30 | 30
+Y khoa | Nhi khoa | MED402 | 3 | 30 | 30
+
+# Pharmacy Department
+Dược học | Hóa dược | PHAR101 | 4 | 45 | 15
+Dược học | Dược vật học | PHAR102 | 3 | 30 | 15
+Dược học | Dược lý lâm sàng | PHAR201 | 4 | 45 | 15
+Dược học | Công nghệ dược | PHAR202 | 3 | 30 | 15
+Dược học | Kiểm nghiệm thuốc | PHAR301 | 3 | 30 | 15
+Dược học | Quản lý dược | PHAR401 | 3 | 30 | 15
+
+# Vietnamese Literature Department
+Văn học Việt Nam | Văn học cổ điển | VL101 | 3 | 30 | 15
+Văn học Việt Nam | Văn học hiện đại | VL201 | 3 | 30 | 15
+Văn học Việt Nam | Lý luận văn học | VL202 | 3 | 30 | 15
+Văn học Việt Nam | Phê bình văn học | VL301 | 3 | 30 | 15
+Văn học Việt Nam | Văn hóa dân gian | VL302 | 2 | 20 | 10
+
+# English Language Department
+Ngôn ngữ Anh | Ngữ pháp tiếng Anh | ELL101 | 3 | 30 | 15
+Ngôn ngữ Anh | Ngữ âm học | ELL102 | 3 | 30 | 15
+Ngôn ngữ Anh | Văn học Anh - Mỹ | ELL201 | 3 | 30 | 15
+Ngôn ngữ Anh | Dịch thuật | ELL202 | 3 | 30 | 15
+Ngôn ngữ Anh | Ngôn ngữ học ứng dụng | ELL301 | 3 | 30 | 15
+Ngôn ngữ Anh | Phương pháp giảng dạy | ELL401 | 3 | 30 | 15
+
+# Chinese Language Department
+Ngôn ngữ Trung | Hán ngữ cơ bản | CHN101 | 4 | 30 | 30
+Ngôn ngữ Trung | Văn học Trung Quốc | CHN201 | 3 | 30 | 15
+Ngôn ngữ Trung | Dịch thuật Trung - Việt | CHN202 | 3 | 30 | 15
+Ngôn ngữ Trung | Thương mại Trung Quốc | CHN301 | 3 | 30 | 15
+Ngôn ngữ Trung | Văn hóa Trung Hoa | CHN401 | 2 | 20 | 10
+
+# Graphic Design Department
+Thiết kế đồ họa | Cơ sở tạo hình | GD101 | 3 | 15 | 30
+Thiết kế đồ họa | Phần mềm thiết kế | GD102 | 4 | 15 | 45
+Thiết kế đồ họa | Typography | GD201 | 3 | 15 | 30
+Thiết kế đồ họa | Thiết kế bao bì | GD202 | 3 | 15 | 30
+Thiết kế đồ họa | Thiết kế web | GD301 | 4 | 15 | 45
+Thiết kế đồ họa | Branding | GD401 | 3 | 15 | 30
+
+# Music Department
+Âm nhạc | Lý thuyết âm nhạc | MUS101 | 3 | 30 | 15
+Âm nhạc | Hòa âm | MUS102 | 3 | 30 | 15
+Âm nhạc | Lịch sử âm nhạc | MUS201 | 2 | 20 | 10
+Âm nhạc | Sáng tác nhạc | MUS202 | 3 | 15 | 30
+Âm nhạc | Biểu diễn âm nhạc | MUS301 | 4 | 15 | 45
+Âm nhạc | Công nghệ âm nhạc | MUS401 | 3 | 15 | 30
+
+# Architecture Department
+Kiến trúc | Vẽ kiến trúc | ARCH101 | 4 | 15 | 45
+Kiến trúc | Thiết kế kiến trúc cơ bản | ARCH102 | 4 | 15 | 45
+Kiến trúc | Lịch sử kiến trúc | ARCH201 | 3 | 30 | 15
+Kiến trúc | Quy hoạch đô thị | ARCH202 | 3 | 30 | 15
+Kiến trúc | Kiến trúc xanh | ARCH301 | 3 | 30 | 15
+Kiến trúc | Thiết kế nội thất | ARCH401 | 4 | 15 | 45
+
+# ============================================================
+# TRAINING SYSTEMS
+# ============================================================
+[training_systems]
+# Format: SystemName | Description
+
+Chính quy | Hệ đào tạo chính quy toàn thời gian
+Liên thông | Hệ liên thông từ cao đẳng lên đại học
+Vừa học vừa làm | Hệ vừa học vừa làm cho người đi làm
+Từ xa | Hệ đào tạo từ xa trực tuyến
+Chuyển tiếp | Hệ chuyển tiếp tín chỉ từ trường khác
+
+# ============================================================
+# CLASS CURRICULA (Which subjects each class takes)
+# ============================================================
+[class_curricula]
+# Format: ClassName | Department | TrainingSystem | SubjectCode1, SubjectCode2, ...
+# @ALL_GENERAL means include all general subjects
+
+# 2021 Classes
+K2021-1 | Khoa học máy tính | Chính quy | @ALL_GENERAL, CS101, CS201, CS202, CS203, CS204, CS301, CS302, CS303, MATH101, MATH102, MATH103
+K2021-2 | Hệ thống thông tin | Liên thông | @ALL_GENERAL, CS101, CS201, CS204, IS201, IS202, IS301, IS302, MATH101, MATH103
+K2021-3 | Kỹ thuật phần mềm | Chính quy | @ALL_GENERAL, CS101, CS201, CS202, SE201, SE202, SE301, SE302, MATH101, MATH103
+
+# 2022 Classes
+K2022-1 | Quản trị kinh doanh | Chính quy | @ALL_GENERAL, BA101, BA201, BA202, BA301, FIN101, MKT101
+K2022-2 | Tài chính - Ngân hàng | Vừa học vừa làm | @ALL_GENERAL, FIN101, FIN201, FIN202, FIN301, BA101, MATH201
+K2022-3 | Marketing | Chính quy | @ALL_GENERAL, MKT101, MKT201, MKT301, MKT302, BA101, BA201
+
+# 2023 Classes
+K2023-1 | Khoa học máy tính | Chính quy | @ALL_GENERAL, CS101, CS201, CS202, CS203, CS204, CS301, CS302, CS303, MATH101, MATH102, MATH103
+K2023-2 | Hệ thống thông tin | Vừa học vừa làm | @ALL_GENERAL, CS101, CS201, CS204, IS201, IS202, IS301, IS302, MATH101, MATH103
+K2023-3 | Kỹ thuật phần mềm | Chính quy | @ALL_GENERAL, CS101, CS201, CS202, SE201, SE202, SE301, SE302, MATH101, MATH103
+
+# 2024 Classes
+K2024-1 | Quản trị kinh doanh | Chính quy | @ALL_GENERAL, BA101, BA201, BA202, BA301, FIN101, MKT101
+K2024-2 | Tài chính - Ngân hàng | Từ xa | @ALL_GENERAL, FIN101, FIN201, FIN202, FIN301, BA101, MATH201
+K2024-3 | Marketing | Chính quy | @ALL_GENERAL, MKT101, MKT201, MKT301, MKT302, BA101, BA201
+
+# 2025 Classes
+K2025-1 | Cơ khí | Chính quy | @ALL_GENERAL, ME101, ME201, ME202, ME301, PHY101, PHY102, MATH101, MATH102
+K2025-2 | Điện - Điện tử | Chuyển tiếp | @ALL_GENERAL, EE101, EE201, EE301, EE302, PHY101, PHY102, MATH101, MATH102
+K2025-3 | Xây dựng | Chuyển tiếp | @ALL_GENERAL, CE101, CE201, CE202, CE301, PHY101, MATH101, MATH102
+K2025-4 | Y khoa | Chính quy | @ALL_GENERAL, MED101, MED102, MED201, MED202, CHEM101, PHY101, MATH101
+K2025-5 | Dược học | Chính quy | @ALL_GENERAL, PHAR101, PHAR102, PHAR201, CHEM101, CHEM201, MATH101
+K2025-6 | Văn học Việt Nam | Vừa học vừa làm | @ALL_GENERAL, VL101, VL201, VL202, VL301, VL302
+K2025-7 | Thiết kế đồ họa | Chính quy | @ALL_GENERAL, GD101, GD102, GD201, GD202, IT101
+
+# New curriculum classes for previous years to add variety
+K2024-4 | Y khoa | Chính quy | @ALL_GENERAL, MED101, MED102, MED201, MED202, CHEM101, PHY101, MATH101
+K2024-5 | Ngôn ngữ Anh | Liên thông | @ALL_GENERAL, ELL101, ELL102, ELL201, ELL202, VL101
+K2024-6 | Âm nhạc | Chính quy | @ALL_GENERAL, MUS101, MUS102, MUS201, MUS202, MUS301
+K2024-7 | Kiến trúc | Chính quy | @ALL_GENERAL, ARCH101, ARCH102, ARCH201, CE101, MATH101, MATH102
+
+K2023-4 | Dược học | Vừa học vừa làm | @ALL_GENERAL, PHAR101, PHAR102, PHAR201, CHEM101, CHEM201, MATH101
+K2023-5 | Ngôn ngữ Trung | Chính quy | @ALL_GENERAL, CHN101, CHN201, CHN202, VL101, ENG101, ENG102
+K2023-6 | Thiết kế đồ họa | Từ xa | @ALL_GENERAL, GD101, GD102, GD201, GD202, IT101
+K2023-7 | Toán học | Chính quy | @ALL_GENERAL, MATH101, MATH102, MATH103, MATH201, MATH202, PHY101, PHY102
+
+K2022-4 | Văn học Việt Nam | Chính quy | @ALL_GENERAL, VL101, VL201, VL202, VL301, VL302
+K2022-5 | Vật lý | Chuyển tiếp | @ALL_GENERAL, PHY101, PHY102, PHY301, PHY302, MATH101, MATH102, MATH103
+K2022-6 | Kiến trúc | Liên thông | @ALL_GENERAL, ARCH101, ARCH102, ARCH201, CE101, MATH101, MATH102
+K2022-7 | Âm nhạc | Vừa học vừa làm | @ALL_GENERAL, MUS101, MUS102, MUS201, MUS202, MUS301
+
+K2021-4 | Ngôn ngữ Anh | Chính quy | @ALL_GENERAL, ELL101, ELL102, ELL201, ELL202, ELL301, ELL401, VL101
+K2021-5 | Hóa học | Chính quy | @ALL_GENERAL, CHEM101, CHEM201, CHEM301, MATH101, MATH102, PHY101
+K2021-6 | Ngôn ngữ Trung | Từ xa | @ALL_GENERAL, CHN101, CHN201, CHN202, CHN301, CHN401, VL101
+K2021-7 | Thiết kế đồ họa | Chuyển tiếp | @ALL_GENERAL, GD101, GD102, GD201, GD301, GD401, IT101
+
+# ============================================================
+# STUDENTS
+# ============================================================
+[students]
+# Format: students_per_class: number
+students_per_class: 30
+
+# ============================================================
+# INSTRUCTORS & ADMINS
+# ============================================================
+[staff]
+regular_instructors: 30
+# No regular admins - only 5 fixed admin accounts
+
+# ============================================================
+# BUILDINGS & ROOMS
+# ============================================================
+[buildings]
+# Format: BuildingName | BuildingCode | RoomsCount
+
+Nhà A | BLDA | 15
+Nhà B | BLDB | 15
+Nhà C | BLDC | 10
+
+# Room types: lecture_hall, classroom, computer_lab, laboratory
+# Capacities: 30, 40, 50, 60 (random distribution)
+
+# ============================================================
+# COURSE GENERATION
+# ============================================================
+[courses]
+# Percentage of subjects to offer per semester type
+fall_offering_rate: 0.7
+spring_offering_rate: 0.7
+summer_offering_rate: 0.3
+
+# Fee per credit
+fee_per_credit: 600000
+
+# ============================================================
+# ENROLLMENT RULES
+# ============================================================
+[enrollment]
+# Students enroll in courses matching their class curriculum
+# Old years (< 2025): All courses completed with grades
+# Current year (2025 fall): In progress, 30% have midterm grades
+# Future semesters: Not enrolled
+
+# Grade ranges for completed courses:
+attendance_min: 7.0
+attendance_max: 10.0
+midterm_min: 5.0
+midterm_max: 9.5
+final_min: 5.0
+final_max: 9.5
+
+# ============================================================
+# NAME GENERATION
+# ============================================================
+[names]
+first_names: Nguyễn, Trần, Lê, Phạm, Hoàng, Huỳnh, Phan, Vũ, Võ, Đặng, Bùi, Đỗ, Hồ, Ngô, Dương
+middle_names: Văn, Thị, Đức, Minh, Quốc, Hữu, Thanh, Thu, Anh, Hoài, Xuân, Bảo
+last_names_male: Hùng, Dũng, Nam, Cường, Tuấn, Bình, Long, Khang, Phong, Hải, Tài, Kiên
+last_names_female: Lan, Hương, Mai, Linh, Nga, Phương, Trang, Hà, Oanh, Thảo, Chi, Nhung
+
+# ============================================================
+# REGULATIONS
+# ============================================================
+[regulations]
+# Format: RegulationName | Target | PDFPath | Description | ExpireDate(optional)
+
+Quy chế tuyển sinh và đào tạo Thạc sĩ | student | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Admission_and_Training_Regulations_for_Master's_Programs.pdf | Quy định chi tiết về quy trình tuyển sinh, điều kiện dự tuyển, hình thức đào tạo, chương trình học, thời gian đào tạo, điều kiện tốt nghiệp và cấp bằng cho sinh viên theo học chương trình Thạc sĩ. Bao gồm các quy định về luận văn, hội đồng chấm luận văn, tiêu chuẩn đầu ra và quyền lợi của học viên cao học. | NULL
+
+Quy chế tuyển sinh và đào tạo Thạc sĩ | instructor | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Admission_and_Training_Regulations_for_Master's_Programs.pdf | Quy định chi tiết về quy trình tuyển sinh, điều kiện dự tuyển, hình thức đào tạo, chương trình học, thời gian đào tạo, điều kiện tốt nghiệp và cấp bằng cho sinh viên theo học chương trình Thạc sĩ. Bao gồm các quy định về luận văn, hội đồng chấm luận văn, tiêu chuẩn đầu ra và quyền lợi của học viên cao học. | NULL
+
+Quy định sử dụng cơ sở vật chất | student | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Regulations_on_the_Use_of_Facilities.pdf | Quy định về việc sử dụng và quản lý các cơ sở vật chất của trường bao gồm phòng học, giảng đường, thư viện, phòng thí nghiệm, phòng máy tính, khu thể thao, ký túc xá. Hướng dẫn đăng ký sử dụng, quy tắc ứng xử, bảo quản tài sản, xử lý vi phạm và trách nhiệm của sinh viên khi sử dụng các tiện ích chung của nhà trường. | NULL
+
+Quy định sử dụng cơ sở vật chất | instructor | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Regulations_on_the_Use_of_Facilities.pdf | Quy định về việc sử dụng và quản lý các cơ sở vật chất của trường bao gồm phòng học, giảng đường, thư viện, phòng thí nghiệm, phòng máy tính, khu thể thao, ký túc xá. Hướng dẫn đăng ký sử dụng, quy tắc ứng xử, bảo quản tài sản, xử lý vi phạm và trách nhiệm của sinh viên khi sử dụng các tiện ích chung của nhà trường. | NULL
+
+Quy định học phí và chính sách miễn giảm | student | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Tuition_Fees_and_Exemption_Policies.pdf | Quy định mức học phí theo từng ngành đào tạo, hình thức thanh toán, thời hạn nộp học phí, chính sách miễn giảm học phí cho sinh viên diện chính sách, sinh viên có thành tích học tập xuất sắc, sinh viên thuộc hộ nghèo, cận nghèo. Hướng dẫn thủ tục xin hoãn nộp học phí, xin hỗ trợ tài chính, vay vốn ngân hàng và các chế độ học bổng khác. | 2026-12-31
+
+Quy định học phí và chính sách miễn giảm | instructor | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Tuition_Fees_and_Exemption_Policies.pdf | Quy định mức học phí theo từng ngành đào tạo, hình thức thanh toán, thời hạn nộp học phí, chính sách miễn giảm học phí cho sinh viên diện chính sách, sinh viên có thành tích học tập xuất sắc, sinh viên thuộc hộ nghèo, cận nghèo. Hướng dẫn thủ tục xin hoãn nộp học phí, xin hỗ trợ tài chính, vay vốn ngân hàng và các chế độ học bổng khác. | 2026-12-31
+
+Quy chế đào tạo đại học hệ chính quy | student | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Undergraduate_Training_Regulations.pdf | Quy định toàn diện về hệ thống đào tạo đại học chính quy bao gồm chương trình khung, phương thức tổ chức dạy và học, quy định về tín chỉ, đăng ký học phần, điều kiện dự thi, hình thức kiểm tra đánh giá, quy đổi điểm, xếp loại học lực. Các quy định về chuyển ngành, chuyển trường, tạm ngừng học, thôi học, điều kiện công nhận tốt nghiệp và cấp bằng tốt nghiệp đại học. | NULL
+
+Quy chế đào tạo đại học hệ chính quy | instructor | https://baygtczqmdoolsvkxgpr.supabase.co/storage/v1/object/public/regulations/Undergraduate_Training_Regulations.pdf | Quy định toàn diện về hệ thống đào tạo đại học chính quy bao gồm chương trình khung, phương thức tổ chức dạy và học, quy định về tín chỉ, đăng ký học phần, điều kiện dự thi, hình thức kiểm tra đánh giá, quy đổi điểm, xếp loại học lực. Các quy định về chuyển ngành, chuyển trường, tạm ngừng học, thôi học, điều kiện công nhận tốt nghiệp và cấp bằng tốt nghiệp đại học. | NULL
+
+# ============================================================
+# OUTPUT
+# ============================================================
+[output]
+output_file: database-qldh/insert_data.sql
